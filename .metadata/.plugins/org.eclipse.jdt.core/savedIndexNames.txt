@@ -1,0 +1,21 @@
+INDEX VERSION 1.130+/s/bach/j/under/mroseliu/NSF_Time_Series/Raptor/Raptor/.metadata/.plugins/org.eclipse.jdt.core
+2740239184.index
+3773370501.index
+149674109.index
+3979774441.index
+1204762258.index
+3714110414.index
+2653712714.index
+3256472011.index
+2336375630.index
+1368188609.index
+4283831159.index
+81780352.index
+1739360313.index
+2120918098.index
+2840491461.index
+217879271.index
+4287139198.index
+2713187749.index
+395839448.index
+1847385028.index
