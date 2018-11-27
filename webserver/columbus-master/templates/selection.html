@@ -1,0 +1,90 @@
+
+<head>
+    <meta charset="UTF-8">
+    <title>Radix</title>
+    <link rel="shortcut icon" href="/static/images/apple-touch-icon-precomposed.png"/>
+    <!--Loading the bootstrap css-->
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet" media="screen"/>
+    <!-- Loading the columbus css -->
+    <link href="/static/css/columbus-style.css" rel="stylesheet" media="screen"/>
+    <!-- Loading the Roboto font. -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet" type="text/css">
+    <!-- Loading jQuery, a 3rd-party library. -->
+    <script src="/static/js/jquery-2.1.4.min.js"></script>
+    <!-- Loading bootstrap.js -->
+    <script src="/static/js/bootstrap.min.js"></script>
+</head>
+<body>
+
+<div class="col-md-12 fill-height">
+    <div class="row fill-height">
+        <header>
+            <ul class="brand">
+                <li><a style="text-decoration: none" href="#">Radix</a>
+                </li>
+            </ul>
+	<div class="dropdown options">
+                <a class="dropdown-toggle" data-toggle="dropdown">{{ user.get_full_name }}<span
+                        class="caret marginleft"></span></a>
+                <ul class="dropdown-menu menu">
+                    <li><a href="/dashboard">Dashboard</a></li>
+                    <li><a href="/workspace">Workspace</a></li>
+                    <li><a href="/myaccount">My Account</a></li>
+                    <li class="divider" style="margin-top: 3px; margin-bottom: 3px"></li>
+                    {% if user.is_superuser %}
+                    <li><a href="/controlpanel">Control Panel</a></li>
+                    {% endif %}
+                    <li><a href="/logout/">Logout</a></li>
+                </ul>
+            </div>
+        </header>
+        <div class="col-md-4"></div>
+        <div class="col-md-4">
+	    <form action="/galileo/" method="POST" enctype="multipart/form-data">
+		{% csrf_token %}
+                {% if error != None %}
+                    <div style="align-content: center;" class="alert alert-danger fade in">
+                        <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+                        {{ error }}
+                    </div>
+                {% endif %}
+                {% if next %}
+                    <input type="hidden" name="next" value="{{ next }}"/>
+                {% endif %}
+		<fieldset>
+		    <legend>Upload Data</legend>
+   		        Select file to upload:
+    			<input type="file" name="file" id="file" accept=".zip,.csv"><br>
+    			<input type="submit" value="Upload File" name="file" file="file"><br><br>
+		</fieldset>
+		<fieldset><legend></legend></fieldset>
+	    </form>
+	    <br><br>
+	    <form>
+		<fieldset>	
+		    <legend>Tools</legend>
+			<ul style="list-style-type:circle">
+ 			    <li><h4><a style="text-decoration: none" href="/home">Radix Data Visualization Tool</a></h4></li>
+			</ul>    
+		</fieldset>
+		<br><br>
+		<fieldset><legend></legend></fieldset>
+	    </form>
+            <div style="text-align: center; padding-top: 40px">
+                <a target="_blank" href="https://arpa-e.energy.gov/" style="text-decoration: none">
+                    <img style="margin-left: 10px; margin-right: 10px;"
+                         src="/static/images/ARPA-E-logo.jpg"
+                         width="15%" height="5%" title="ARPA-E">
+                </a>
+                <a style="margin-left: 15px; text-decoration: none"
+                   target="_blank" href="http://www.cs.colostate.edu/cstop/index">
+                    <img src="/static/images/rams-icon-dark.png" width="10%" height="5%"
+                         title="Colorado State University">
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4"></div>
+    </div>
+</div>
+</body>
+</html>

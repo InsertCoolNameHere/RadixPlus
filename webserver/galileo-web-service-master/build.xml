@@ -1,0 +1,44 @@
+<?xml version="1.0" standalone="yes"?>
+
+<project name="galileo-web-service" default="war">
+	<property environment="env"/>
+	
+	<!-- Directories -->
+	<property name="src" value="src" />
+	<property name="build" value="build/classes" />
+	<property name="lib" value="WebContent/WEB-INF/lib" />
+	<property name="dist" value="dist" />
+
+	<path id="compile.classpath">
+		<fileset dir="${lib}">
+			<include name="*.jar" />
+		</fileset>
+		<fileset dir="${env.CATALINA_HOME}/lib">
+			<include name="*.jar" />
+		</fileset>
+	</path>
+
+	<target name="clean">
+		<delete dir="${dist}" />
+		<delete dir="${build}" />
+	</target>
+
+	<target name="init" depends="clean">
+		<mkdir dir="${build}" />
+		<mkdir dir="${dist}" />
+	</target>
+
+	<target name="compile" depends="init">
+		<javac srcdir="${src}" destdir="${build}" debug="true" includeantruntime="false">
+			<classpath refid="compile.classpath" />
+		</javac>
+	</target>
+
+	<target name="war" depends="compile">
+		<war destfile="dist/galileo-web-service.war" webxml="WebContent/WEB-INF/web.xml">
+			<fileset dir="WebContent" />
+			<classes dir="${build}" />
+		</war>
+	</target>
+
+</project>

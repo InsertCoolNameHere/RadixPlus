@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://java.sun.com/xml/ns/javaee" xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+	id="WebApp_ID" version="2.5">
+
+	<display-name>Galileo Web-Service</display-name>
+
+	<!-- Servlet to Restlet adapter declaration (Mandatory) -->
+	<servlet>
+		<servlet-name>GalileoWebService</servlet-name>
+		<servlet-class>org.restlet.ext.servlet.ServerServlet</servlet-class>
+
+		<!-- Your application class name (Optional - For mode 3) -->
+		<init-param>
+			<param-name>org.restlet.application</param-name>
+			<param-value>galileo.service.ColumbusServerApplication</param-value>
+		</init-param>
+
+		<!-- List of supported client protocols (Optional - Only in mode 3) -->
+		<init-param>
+			<param-name>org.restlet.clients</param-name>
+			<param-value>HTTP HTTPS FILE</param-value>
+		</init-param>
+
+		<!-- Add the Servlet context path to routes (Optional) -->
+		<init-param>
+			<param-name>org.restlet.autoWire</param-name>
+			<param-value>true</param-value>
+		</init-param>
+
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+
+	<!-- Mapping catching all requests on a given path (Mandatory) -->
+	<servlet-mapping>
+		<servlet-name>GalileoWebService</servlet-name>
+		<url-pattern>/*</url-pattern>
+	</servlet-mapping>
+</web-app>

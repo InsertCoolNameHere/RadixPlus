@@ -1,0 +1,61 @@
+{% extends "nlbase.html" %}
+{% load staticfiles %}
+{% block title %}
+    <title>Publications</title>
+{% endblock %}
+{% block navitems %}
+    <li><a href="/?page=overview">Getting Started</a></li>
+    <li><a href="/?page=usage">Usage</a></li>
+    <li class="active"><a href="/?page=publications">Publications</a></li>
+    <li><a href="/?page=releases">Releases</a></li>
+    <li><a href="/?page=people">People</a></li>
+{% endblock %}
+{% block nlbody %}
+    <div class="docs-header" id="content" tabindex="-1">
+        <div class="container">
+            <h1>Publications</h1>
+            <p>Understand the architecture, know what the engine is capable of, conducted experiments, results, and
+                more.</p>
+        </div>
+    </div>
+    <div id="publications-div" class="container bs-docs-container">
+        <div class="row" style="flex-grow: 1;">
+            <div class="col-md-12" role="main">
+                <div class="bs-docs-section">
+                    <p style="margin-bottom: 20px;">
+                        This material is presented to ensure timely dissemination of scholarly and technical work.
+                        Copyright and all rights therein are retained by authors or by other copyright holders.
+                        All persons copying this information are expected to adhere to the terms and constraints
+                        invoked by each author's copyright. In most cases, these works may not be reposted
+                        without the explicit permission of the copyright holder.
+                    </p>
+                    <ol reversed class="publications">
+                        <li>
+                            Johnson Charles Kachikaran Arulswamy, Sangmi Lee Pallickara.
+                            <a class="publication"
+                               href="https://github.com/jkachika/columbus/raw/master/docs/columbus-ieee-scc-2017.pdf"
+                               download="columbus-ieee-scc-2017">Columbus: Enabling Scalable
+                            Scientific Workflows for Fast Evolving Spatio-Temporal Sensor Data.</a>
+                            (To appear) Proceedings
+                            of <i>The 14th IEEE International Conference on Services Computing (IEEE SCC)</i>.
+                            Honolulu, Hawaii, USA. 2017.
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block nlbodyscripts %}
+    <script>
+        $(document).ready(function () {
+            var $navigation = $('#navigation');
+            var $header = $('#content');
+            var $footer = $('footer');
+            var height = $navigation.css('height') + ' - ' + $header.css('height') + ' - ' + $header.css('marginTop') + ' - '
+                    + $header.css('marginBottom') + ' - ' + $footer.css('height') + ' - ' + $footer.css('marginTop') + ' - ' +
+                    $footer.css('marginBottom');
+            $('#publications-div').css('min-height', 'calc(100% - ' + height + ')');
+        });
+    </script>
+{% endblock %}
