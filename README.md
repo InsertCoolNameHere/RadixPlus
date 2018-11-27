@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="460" height="300" src="apple-touch-icon-precomposed.png">
+  <img width="300" height="300" src="apple-touch-icon-precomposed.png">
 </p>
 
 # Radix: High-throughput Georeferencing for Observational Data
