@@ -45,6 +45,7 @@ sudo apt install tomcat7
 5. Set up cluster configuration files in $GALILEO_CONF/hostnames and tomcat/webapps/galileo-web-service/hostnames.
 This is a text file in which each line contains <hostname:port_number>.
 6. Run the mkgroups script in $GALILEO_HOME/bin/util
+
 # License
 Copyright (c) 2018, Computer Science Department, Colorado State University
 All rights reserved.
