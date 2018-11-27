@@ -1,4 +1,4 @@
-![alt text](apple-touch-icon-precomposed.png?style=centerme)
+->![alt text](apple-touch-icon-precomposed.png?style=centerme)<-
 
 # Radix: High-throughput Georeferencing for Observational Data
 
