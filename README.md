@@ -11,7 +11,8 @@ Radix is a high-throughput georeferencing and data storage pipeline written in J
 - Interface can be dockerized to run on any platform
 - Data archival in Cyverse's IRODS
 
-The current version is pre-packaged as a Java Archive file.
+The current version is pre-packaged as a Java Archive file, and directory structures are preserved from the original setup here. In the current state, there is a significant amount of unnecessary software included in this repository. This is due to re-use of some code from other applications and fearing breaking dependencies by removing code.
+
 ## Requirements
 - Linux based OS
 - Java 8
@@ -26,8 +27,21 @@ The current version is pre-packaged as a Java Archive file.
 
 ## Installation and Deployment
 1. Download the Radix bundle and unpack it to the desired install location
-2. 
-
+2. Add environment variables for Galileo in .bashrc file
+```
+nano ~/.bashrc
+```
+Add these lines:
+```
+export GALILEO_HOME=<path to galileo directory>
+export GALILEO_CONF=<path to galileo directory>/config
+export GALILEO_ROOT=/tmp/<username>-galileo
+```
+3. Install Apache Tomcat
+```
+sudo apt install tomcat7
+```
+4. 
 # License
 Copyright (c) 2018, Computer Science Department, Colorado State University
 All rights reserved.
