@@ -22,7 +22,7 @@
 <role rolename="admin"/>
 <role rolename="admin-gui"/>
 <role rolename="manager-gui"/>
-<user username="max" password="maxr2309" roles="admin,admin-gui,manager-gui"/>
+<user username="YOUR_USERNAME" password="YOUR_PASSWORD" roles="admin,admin-gui,manager-gui"/>
 <!--
   NOTE:  By default, no user is included in the "manager-gui" role required
   to operate the "/manager/html" web application.  If you wish to use this app,
