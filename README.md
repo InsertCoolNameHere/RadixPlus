@@ -41,7 +41,8 @@ export GALILEO_ROOT=/tmp/<username>-galileo
 ```
 sudo apt install tomcat7
 ```
-4. 
+4. Modify Tomcat username and password in tomcat/conf/tomcat-users.xml
+5. Set up cluster configuration files in $GALILEO_CONF/hostnames and tomcat/webapps/galileo-web-service/hostnames
 # License
 Copyright (c) 2018, Computer Science Department, Colorado State University
 All rights reserved.
