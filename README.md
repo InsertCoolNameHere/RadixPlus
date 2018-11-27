@@ -45,7 +45,8 @@ sudo apt install tomcat7
 5. Set up cluster configuration files in $GALILEO_CONF/hostnames and tomcat/webapps/galileo-web-service/hostnames.
 This is a text file in which each line contains <hostname:port_number>.
 6. Run the mkgroups script in $GALILEO_HOME/bin/util to generate group files. Place them in the $GALILEO_CONF/network directory
-7. For georeferencing of data points to plots in Radix, a shapefile is necessary. This file must be explicitly names plots.json and placed in $GALILEO_CONF/grid
+7. For georeferencing of data points to plots in Radix, a shapefile is necessary. This file must be explicitly named plots.json and placed in $GALILEO_CONF/grid.
+
 
 # License
 Copyright (c) 2018, Computer Science Department, Colorado State University
