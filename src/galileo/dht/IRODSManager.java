@@ -70,7 +70,7 @@ public class IRODSManager {
 	
 	
 	public IRODSManager() {	//davos.cyverse.org
-		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home/radix_subterra", "iplant", "");
+		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "CYVERSE_USERNAME", "CYVERSE_PASSWORD", "/iplant/home/radix_subterra", "iplant", "");
 		try {
 			filesystem = IRODSFileSystem.instance();
 			fileFactory = filesystem.getIRODSFileFactory(account);
