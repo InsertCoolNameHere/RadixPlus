@@ -1,7 +1,5 @@
-![alt text](apple-touch-icon-precomposed.png?style=centerme)
-
 <p align="center">
-  <img width="460" height="300" src="http://www.github.com/maxr1876/Radix/apple-touch-icon-precomposed.png">
+  <img width="460" height="300" src="apple-touch-icon-precomposed.png">
 </p>
 
 # Radix: High-throughput Georeferencing for Observational Data
