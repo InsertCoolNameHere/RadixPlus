@@ -47,6 +47,22 @@ This is a text file in which each line contains <hostname:port_number>.
 6. Run the mkgroups script in $GALILEO_HOME/bin/util to generate group files. Place them in the $GALILEO_CONF/network directory
 7. For georeferencing of data points to plots in Radix, a shapefile is necessary. This file must be explicitly named plots.json and placed in $GALILEO_CONF/grid.
 
+## Creating User Accounts
+New users can be created with a Python script. This allows a new user access to the data exploration interface. To add a new
+user, navigate to the directory containing the manage.py script, and open an interactive Python shell:
+```
+python
+>>> import os
+>>> os.environ.setdefault("DJANGO_SETTINGS_MODULE", "columbus.prod_settings")
+'columbus.prod_settings'
+>>> import django
+>>> django.setup()
+>>> from django.contrib.auth.models import User
+>>> user=User.objects.create_user(username='your_user_name', password='your_password')
+>>> user.save()
+>>> quit()
+```
+
 
 # License
 Copyright (c) 2018, Computer Science Department, Colorado State University
