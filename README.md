@@ -63,6 +63,55 @@ python
 >>> quit()
 ```
 
+## Data Ingestion
+Before data ingestion can begin, first ensure that the Galileo/Radix cluster is up and ready to begin.
+```
+./galileo-cluster start
+```
+Wait a few seconds for the cluster to initialize and read configuration files. The cluster status can be checked with
+```
+./galileo-cluster status
+```
+Once all nodes display "Online", the cluster is ready to begin ingesting data.
+For data ingestion, first select which nodes should act as ingest nodes, and place data on those machines, ensuring that the data file name and path is the same on each machine. Now the filesystem must be created and the features defined. This is an example:
+```
+Connector connector = new Connector();
+List<Pair<String, FeatureType>> featureList = new ArrayList<>();
+//features must be in order which they appear in raw data
+featureList.add(new Pair<>("time", FeatureType.STRING));
+		
+featureList.add(new Pair<>("lat", FeatureType.DOUBLE));
+featureList.add(new Pair<>("long", FeatureType.DOUBLE));
+featureList.add(new Pair<>("plotID", FeatureType.INT));
+featureList.add(new Pair<>("temperature", FeatureType.DOUBLE));
+featureList.add(new Pair<>("humidity", FeatureType.DOUBLE));
+featureList.add(new Pair<>("CO2", FeatureType.DOUBLE));
+featureList.add(new Pair<>("genotype", FeatureType.STRING));
+featureList.add(new Pair<>("rep", FeatureType.INT));
+for (int i = 1; i < 7; i++)
+	featureList.add(new Pair<>("Random"+i, FeatureType.DOUBLE));
+featureList.add(new Pair<>("Random7", FeatureType.STRING));
+SpatialHint spatialHint = new SpatialHint("lat", "long");
+
+FilesystemRequest fsRequest = new FilesystemRequest(
+"roots", FilesystemAction.CREATE, featureList, spatialHint);
+fsRequest.setNodesPerGroup(5);
+fsRequest.setPrecision(11);
+fsRequest.setTemporalType(TemporalType.HOUR_OF_DAY);
+
+//Any Galileo storage node hostname and port number
+NetworkDestination storageNode = new NetworkDestination("lattice-100.cs.colostate.edu", 5635);
+connector.publishEvent(storageNode, fsRequest);
+Thread.sleep(2500);
+connector.close();
+```
+Once this is complete, data can be ingested by either sending the command to each ingest node manually, or using the convenience script, start-ingest.sh. The script accepts two arguments, the path to the file containing the ingest node machine names or addresses, and the path to the ingest data on each machine.
+```
+./start-ingest.sh /path/to/ingest_node_config_file /path/to/ingest_data
+```
+Changes should be reflected within a few seconds at the data dashboard at radix.cs.colostate.edu.
+In the current state, Radix only accepts CSV files, and only of a particular format. It is required that the first 3 fields be timestamp, longitude, latitude. The remaining fields are currently hard-coded as:
+plotID(int), temperature(double), humidity(double), CO2(double), genotype(string), 6 random double values, rep(double), random boolean value. These values are used in galileo.dht.DataStoreHandler. 
 
 # License
 Copyright (c) 2018, Computer Science Department, Colorado State University
