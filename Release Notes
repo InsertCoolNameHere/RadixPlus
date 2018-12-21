@@ -1,0 +1,22 @@
+Radix v 0.8
+
+Features:
+
+-High-throughput data ingestion
+--Upwards of 10 MB/s for georeferencing+metadata extraction+indexing
+
+-Polygon and feature query support from web interface
+
+-Interface is docker-ready 
+
+-Data archival in IRODS so it is easily accessible by CyVerse applications
+
+Known Issues:
+
+-Only accepts one specific format of CSV file
+
+-No output from Docker container
+
+-Upon cluster restart, nodes often fail when reconstructing the metadata graph
+
+-Recently, writes to IRODS will fail randomly. 
