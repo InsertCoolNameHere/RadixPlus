@@ -19,4 +19,7 @@ Known Issues:
 
 -Upon cluster restart, nodes often fail when reconstructing the metadata graph
 
--Recently, writes to IRODS will fail randomly. 
+-Recently, writes to IRODS will fail randomly
+
+-On web interface, "Visualize by feature" dropdown options are hard-coded and does not actual query the backend
+  --Other drop-down menu options are also hard-coded. A new query type needs to be created to return existing features
