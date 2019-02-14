@@ -1,0 +1,26 @@
+# Eclipse files
+.project
+.classpath
+.build
+.settings
+.externalToolBuilders
+.metadata/
+webserver/
+
+# Local dev files
+classes
+depcache
+build.properties
+
+# javadoc-generated documentation
+docs/api
+
+# Mac OS File Attributes
+.DS_Store
+
+# Binaries
+bin/
+bin/*/*/
+bin/*/*/*.class
+bin/*/*/*/*.class
+lib/galileo-spacetime-[0-9].[0-9].jar

@@ -128,7 +128,7 @@ import web.Listener;
  *
  * @author malensek
  */
-public class StorageNode  implements RequestListener{
+public class StorageNode implements RequestListener{
 
 	private static final Logger logger = Logger.getLogger("galileo");
 	private StatusLine nodeStatus;
@@ -155,6 +155,7 @@ public class StorageNode  implements RequestListener{
 	private DataStoreHandler dataStoreHandler;
 	private ConcurrentHashMap<String, QueryTracker> queryTrackers = new ConcurrentHashMap<>();
 	private Listener listener;
+	
 	public StorageNode() throws IOException, HashGridException {
 		try {
 			this.hostname = InetAddress.getLocalHost().getHostName();
@@ -165,7 +166,10 @@ public class StorageNode  implements RequestListener{
 				throw new UnknownHostException(
 						"Failed to identify host name of the storage node. Details follow: " + e.getMessage());
 		}
+		
+		// THIS PART HANDLES LOADING OF THE SHAPEFILE
 		this.dataStoreHandler = new DataStoreHandler(this);
+		
 		this.hostname = this.hostname.toLowerCase();
 		this.canonicalHostname = this.canonicalHostname.toLowerCase();
 		this.port = NetworkConfig.getPort();
@@ -474,7 +478,7 @@ public class StorageNode  implements RequestListener{
 	public void handleIRODSReadyCheck(IRODSReadyCheck check, EventContext context) throws IOException {
 		IRODSReadyCheck response = new IRODSReadyCheck(IRODSReadyCheck.Type.REPLY);
 		long timeSinceLastMessage = System.currentTimeMillis() - this.dataStoreHandler.getLastProcessedTime();
-		if (timeSinceLastMessage >= 600000) //600000 ms = 10 minutes
+		if (timeSinceLastMessage >= 600*1000) //600000 ms = 10 minutes
 			response.setReady(true);
 		context.sendReply(response);
 	}

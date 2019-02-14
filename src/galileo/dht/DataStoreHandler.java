@@ -92,64 +92,101 @@ public class DataStoreHandler {
 	private static Logger logger = Logger.getLogger("galileo");
 	private StorageNode sn;
 	public ArrayList<Long> unprocessedTimes, irodsTimes, metadataTimes;
-	private Timer mapClearer = new Timer(), IRODSReadyChecker = new Timer();
+	private Timer mapClearer = new Timer();
+	private Timer IRODSReadyChecker = new Timer();
+	
+	// LAST TIME A MESSAGE WAS PROCESSED BY THE SYSTEM, EITHER LOCAL STORAGE OR STORAGE TO IRODS
 	private long lastMessageTime;
 	private IRODSManager subterra;
 	private Connector connector;
 	private File messageLogger = new File("/s/bach/j/under/mroseliu/Documents/systemPerf/throughput.txt");
 	private BufferedWriter bw;
+	
 	public DataStoreHandler(StorageNode sn) {
+		
 		lastMessageTime = System.currentTimeMillis();
+		
+		// SCHEDULE PLOT DATA UPLOADER AT 10 SEC INTERVALS
 		mapClearer.scheduleAtFixedRate(new TimerTask() {
-			  @Override
-			  public void run() {
-				  HashSet<Integer> toRemove = new HashSet<>();
-				  synchronized(plotIDToChunks) {
-					  for (Map.Entry<Integer, TimeStampedBuffer> entry : plotIDToChunks.entrySet()) {
-						  if (System.currentTimeMillis() - entry.getValue().getTimeStamp() > 10000) {//if more than 10 seconds since plot has been updated...
-							  StoreMessage irodsMsg = new StoreMessage(Type.TO_LOCAL, entry.getValue().getBuffer(), (GeospatialFileSystem)sn.getFS("roots"), "roots", entry.getKey());
-							  unProcessedMessages.add(irodsMsg);
-							  toRemove.add(entry.getKey());
-						  }
-					  }
-					  for (Integer pID : toRemove)
-						  plotIDToChunks.remove(pID);
-					  synchronized(bw) {
-						 try {
+			@Override
+			public void run() {
+				
+				HashSet<Integer> toRemove = new HashSet<>();
+				
+				// THIS IS FOR LOCAL STORAGE
+				synchronized (plotIDToChunks) {
+					for (Map.Entry<Integer, TimeStampedBuffer> entry : plotIDToChunks.entrySet()) {
+						
+						// IF MORE THAN 10 SECONDS HAVE PASSED SINCE NEW DATA FOR A PLOT HAS COME IN
+						// TAKE THE DATA BUFFERED FOR THAT PLOT ID FROM THE BUFFER TO LOCAL GALILEO
+						if (System.currentTimeMillis() - entry.getValue().getTimeStamp() > 10000) {
+							
+							// handleToLocal METHOD FOR THIS
+							StoreMessage irodsMsg = new StoreMessage(Type.TO_LOCAL, entry.getValue().getBuffer(), (GeospatialFileSystem) sn.getFS("roots"),
+									"roots", entry.getKey());
+							unProcessedMessages.add(irodsMsg);
+							toRemove.add(entry.getKey());
+							
+						}
+					}
+					for (Integer pID : toRemove)
+						plotIDToChunks.remove(pID);
+					synchronized (bw) {
+						try {
 							bw.flush();
 						} catch (IOException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
-					  }
-				  }
-			  }
-			}, 10*1000, 10*1000);
+					}
+				}
+			}
+		}, 10 * 1000, 10 * 1000);
+		
+		// THIS IS FOR IRODS STORAGE
+		
+		// READS THE TEMPORARY GALILEO FILE AND SENDS IT TO IRIDS FOR STORAGE
 		IRODSReadyChecker.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
-				if (System.currentTimeMillis() - lastMessageTime >= 300000) { //5 minutes instead of 10
+				if (System.currentTimeMillis() - lastMessageTime >= 300*1000) { 
 					
-					//If 10 minutes has passed since last message processed, data is ready to be sent to IRODS
+					//If 5 minutes has passed since last message processed, data is ready to be sent to IRODS
 					//First check if all other machines are ready				
 					try {
+						
 						boolean allReady = true;
+						
 						String nodeFile = SystemConfig.getNetworkConfDir() + File.separator + "hostnames";
 						String [] hosts = new String(Files.readAllBytes(Paths.get(nodeFile))).split(System.lineSeparator());
+						
+						// CHECKS IF ALL NODES ARE READY TO RECEIVE DATA FIRST
+						// NODES ARE READY IF IT HAS BEEN 10 MINUTES SINCE LAST MESSAGE
 						for (Event e : broadcastEvent(new IRODSReadyCheck(IRODSReadyCheck.Type.CHECK), connector)) {
 							if (!((IRODSReadyCheck)e).isReady())
 								allReady = false;
 						}
-						//if all machines ready, initiate IRODS transfer phase
+						
+						//IF ALL NODES ARE READY, initiate IRODS transfer phase
 						if (allReady) {
 							//default coordinator is last machine on list
+							// COORDINATOR IS THE NODE THAT MAINTAINS A LOCK FOR ALL PLOT IDS
+							// ONLY ONE PLOT ID CAN BE WORKED WITH AT A TIME
 							NetworkDestination coordinator = new NetworkDestination(hosts[hosts.length-1].split(":")[0], Integer.parseInt(hosts[hosts.length-1].split(":")[1]));
-							//For each plot that was processed by this machine, attempt to get the lock from coordinator
+							
+							// For each plot that was processed by this machine, attempt to get the lock from coordinator
 							for (Map.Entry<Integer, String> entry : plotsProcessed.entrySet()) {
+								
+								// LOCK REQUEST FOR EACH PLOT SENT TO COORDINATOR ONE AT A TIME
 								IRODSRequest reply = (IRODSRequest)connector.sendMessage(coordinator, new IRODSRequest(TYPE.LOCK_REQUEST, entry.getKey()));
+								
+								// IF LOCK FOR THE REQUESTED PLOTS IS GRANTED BY THE COORDINATOR NODE
 								if (reply.getType() == TYPE.LOCK_ACQUIRED) {
+									
 									//this machine gets privilege to write this plot file to IRODS.
 									//create a StoreMessage so a thread can deal with this task
+									
+									// handleDataRequest METHOD FOR THIS
 									StoreMessage dataRequest = new StoreMessage(Type.DATA_REQUEST, "", (GeospatialFileSystem)sn.getFS("roots"), "roots", entry.getKey());
 									
 									dataRequest.setFilePath(SystemConfig.getRootDir() + File.separator + "dailyTemp/" + entry.getKey() + "/" +
@@ -164,6 +201,7 @@ public class DataStoreHandler {
 				}
 			}
 		}, 300*1000, 300*1000); //300 seconds = 5 minutes
+		
 		unProcessedMessages = new PriorityBlockingQueue<>();
 		plotIDToChunks = new ConcurrentHashMap<>(100, .9f, 10);
 		threadPool = new MessageHandler[10];
@@ -200,11 +238,14 @@ public class DataStoreHandler {
 	}
 	
 	private List<Event> broadcastEvent(Event event, Connector connector) throws IOException, InterruptedException{
+		
 		ArrayList<Event> responses = new ArrayList<>();
+		
 		String nodeFile = SystemConfig.getNetworkConfDir() + File.separator + "hostnames";
 		String [] hosts = new String(Files.readAllBytes(Paths.get(nodeFile))).split(System.lineSeparator());
 		for (String host : hosts) {
 			NetworkDestination dest = new NetworkDestination(host.split(":")[0], Integer.parseInt(host.split(":")[1]));
+			
 			if (!host.split(":")[0].equals(sn.getHostName())) {//don't send event to self
 				Event response = connector.sendMessage(dest, event);
 				responses.add(response);
@@ -377,6 +418,13 @@ public class DataStoreHandler {
 			}
 		}
 		
+		/**
+		 * TEMPORARILY STORING DATA IN GALILEO UNTIL ALL PROCESSING IS DONE
+		 * AFTER WHICH IT GETS STORED IN IRODS THROUGH A SEPARATE SERVICE
+		 * 
+		 * @author sapmitra
+		 * @param msg
+		 */
 		private void handleToLocal(StoreMessage msg) {
 			//Compute metadata for this chunk of data. Write IRODS path into a local file for permanent storage.
 			//Then in a temporary file, write the actual data. This temporary file will hold the raw data
@@ -384,6 +432,7 @@ public class DataStoreHandler {
 			//with all other data of the same plot.
 			long start = System.currentTimeMillis();
 			try {
+				// DATA FROM THE BUFFER
 				String data = msg.getData();
 				String [] sortedLines = data.toString().split(System.lineSeparator());
 				Arrays.sort(sortedLines, new Comparator<String>() {
@@ -406,23 +455,36 @@ public class DataStoreHandler {
 					newData.append(line);
 					newData.append(System.lineSeparator());
 				}
+				
+				// DATA FROM BUFFER SORTED BASED ON TIMESTAMP
 				data = newData.toString().trim();
 				Metadata meta = createMeta(msg.getPlotID(), data);
+				
 //				String IRODSPath = path to file, without actual file name. File name is used from localfile
 				String IRODSPath = meta.getName().replaceAll("-", File.separator);
+				
+				// THE 'METADATA' OF THE BLOCK HAS THE ACTUAL DATA IN IT INSIDE THE 'ATTRIBUTES' VARIABLE
 				//Create a block which contains the location of the raw data in IRODS
 				Block block = new Block(msg.getFSName(), meta, ("/iplant/radix_subterra/plots/" + IRODSPath+ "/" + meta.getName() + ".gblock").getBytes());
 //				Block block = new Block(msg.getFSName(), meta, data.getBytes());
+				
 				synchronized(metadataTimes) {
 					metadataTimes.add(System.currentTimeMillis()-start);
 				}
+				
+				// THE BLOCK DATA IS SAVED INTO A FILE AND CONTAINS THE PATH TO AN IRODS FILE TO WHICH IT WOULD BE SAVED
+				// THE BLOCK METADATA, WHICH CONTAINS THE ACTUAL DATA IS SAVED ON THE METADATA GRAPH
 				msg.getFS().storeBlock(block);
+				
+				
+				// A TEMPORARY FILE IS ALSO SAVED IN GALILEO THAT SAVES THE ACTUAL BLOCK DATA
 				File tempDir = new File(SystemConfig.getRootDir() + File.separator + "dailyTemp/" + IRODSPath);
 				if (!tempDir.exists()) 
 					tempDir.mkdirs();
 				File tempFile = new File(SystemConfig.getRootDir() + File.separator + "dailyTemp/" + IRODSPath + File.separator + meta.getName() + ".gblock");
 				if (!tempFile.exists())
 					tempFile.createNewFile();
+				
 				FileWriter writer = new FileWriter(tempFile, true);
 				writer.append(msg.getData() + "\n");
 				writer.close();
