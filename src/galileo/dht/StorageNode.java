@@ -167,7 +167,6 @@ public class StorageNode implements RequestListener{
 						"Failed to identify host name of the storage node. Details follow: " + e.getMessage());
 		}
 		
-		// THIS PART HANDLES LOADING OF THE SHAPEFILE
 		this.dataStoreHandler = new DataStoreHandler(this);
 		
 		this.hostname = this.hostname.toLowerCase();
@@ -186,6 +185,9 @@ public class StorageNode implements RequestListener{
 		}
 		this.numCores = Runtime.getRuntime().availableProcessors();
 		this.requestHandlers = new CopyOnWriteArrayList<ClientRequestHandler>();
+		
+		
+		// THIS PART HANDLES LOADING OF THE SHAPEFILE
 		/*Configure the global HashGrid based on a required file. This file
 		 * must be located in the config/grid directory. Only one such file may exist.*/
 		String pathToGridFile = SystemConfig.getConfDir()+File.separator+"grid";

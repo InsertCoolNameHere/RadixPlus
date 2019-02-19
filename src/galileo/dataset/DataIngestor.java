@@ -225,8 +225,12 @@ public class DataIngestor extends Thread{
 	 * @param key the selection key to read*/
 	private void read(SelectionKey key) throws IOException, HashException, PartitionException {
 		logger.info("Beginnning to read ingest file. Time: " + new Date(System.currentTimeMillis()));
+		
+		// INITIATE CHUNK PROCESSORS
+		// THESE WILL PICK OFF CHUNKS FROM THE QUEUE
 		for (ChunkProcessor cp : threadPool)
 			cp.start();
+		
 		String filePath = readKey(key);
 		boolean fileRead = false;
 		String lineSep = System.lineSeparator();
@@ -242,7 +246,10 @@ public class DataIngestor extends Thread{
 		StringBuilder chunk = new StringBuilder();
 		if (f.exists()) 
 			while (!fileRead) {
-								
+						
+				// 250 MB OF FILE IS READ IN AT A TIME
+				// OUT OF THIS, WE FORM CHUNKS OF 400 RECORDS EACH FOR PROCESSING
+				// THESE CHUNKS ARE PROCESSED BY A CHUNK PROCESSOR THREAD
 				try {
 					
 					if (start + offSet > inChannel.size()) {
@@ -251,6 +258,8 @@ public class DataIngestor extends Thread{
 					}
 					MappedByteBuffer mmb = inChannel.map(FileChannel.MapMode.READ_ONLY, start, offSet);//inChannel.size()
 					byte[] buffer = new byte[(int)offSet];
+					
+					// PUT 250MB DATA FROM BYTE BUFFER INTO THIS 'buffer' ARRAY
 				    mmb.get(buffer);
 					start += offSet;
 					CustomBufferedReader in = new CustomBufferedReader(new InputStreamReader(new ByteArrayInputStream(buffer)));
@@ -278,6 +287,8 @@ public class DataIngestor extends Thread{
 		else
 			logger.warning("DataIngestor received invalid file path: " + filePath);
 
+		
+		// UNTIL ALL CHUNKS HAVE BEEN READ OF THE QUEUE, HALT HERE
 		while(queue.size() > 0) {
 
 		}
@@ -316,6 +327,8 @@ public class DataIngestor extends Thread{
 					try {
 						String data = master.queue.take();
 						long start = System.currentTimeMillis();
+						
+						// DATA IS COMPRESSED BEFORE BEING SENT OUT
 						byte[] compressed = Snappy.compress(data);
 						SamplerResponse response = sampler.sample(this.sn.getGlobalGrid(), data);
 						HashMap<NodeInfo, Integer> dests = response.getNodeMap();
@@ -331,6 +344,8 @@ public class DataIngestor extends Thread{
 								logger.severe("Identified null as destination");
 						}
 						else {
+							
+							// THE DESTINAION NODE WITH MOST RECORDS BELONGING TO IT WILL HANDLE THIS CHUNK
 							NodeInfo finalDest = null;
 							int count = 0;
 							for (NodeInfo node : dests.keySet()){

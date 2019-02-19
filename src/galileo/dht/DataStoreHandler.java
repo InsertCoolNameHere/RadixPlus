@@ -106,7 +106,8 @@ public class DataStoreHandler {
 		
 		lastMessageTime = System.currentTimeMillis();
 		
-		// SCHEDULE PLOT DATA UPLOADER AT 10 SEC INTERVALS
+		// SCHEDULE PLOT DATA BACKER AT 10 SEC INTERVALS
+		// JUST PERFORMS LOCAL BACKUP OF DATA COLLECTED
 		mapClearer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
@@ -144,8 +145,7 @@ public class DataStoreHandler {
 		}, 10 * 1000, 10 * 1000);
 		
 		// THIS IS FOR IRODS STORAGE
-		
-		// READS THE TEMPORARY GALILEO FILE AND SENDS IT TO IRIDS FOR STORAGE
+		// READS THE TEMPORARY GALILEO FILE WITH BACKED UP RECORDS AND SENDS IT TO IRIDS FOR STORAGE
 		IRODSReadyChecker.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
@@ -334,6 +334,9 @@ public class DataStoreHandler {
 						plotIDToChunks.computeIfAbsent(plotID, k -> new TimeStampedBuffer(new StringBuilder()));
 						plotIDToChunks.get(plotID).update(line+lineSep);
 						synchronized(plotIDToChunks.get(plotID)) {
+							
+							// WHEN THERE ARE MORE THAN 500 RECORDS FOR A PLOT, ATTEMPT TO STORE IT IN LOCAL GALILEO
+							// OTHERWISE PERSIST IT IN plotIDToChunks
 							if (plotIDToChunks.get(plotID) != null && plotIDToChunks.get(plotID).getBuffer().split(lineSep).length >= 500) {//this threshold is subject to change!
 								//add to existing block for the plot identified
 								StoreMessage irodsMsg = new StoreMessage(Type.TO_LOCAL, plotIDToChunks.get(plotID).getBuffer(), gfs, msg.getFSName(), plotID);
@@ -435,6 +438,8 @@ public class DataStoreHandler {
 				// DATA FROM THE BUFFER
 				String data = msg.getData();
 				String [] sortedLines = data.toString().split(System.lineSeparator());
+				
+				// SORTING THE DATA IN BUFFER BASED ON TIME
 				Arrays.sort(sortedLines, new Comparator<String>() {
 				    @Override
 				    public int compare(String o1, String o2) {
@@ -450,6 +455,7 @@ public class DataStoreHandler {
 						return d1.compareTo(d2);
 				    }
 				});
+				
 				StringBuffer newData = new StringBuffer();
 				for (String line : sortedLines) {
 					newData.append(line);
