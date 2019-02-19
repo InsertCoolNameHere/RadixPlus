@@ -34,6 +34,7 @@ import java.util.List;
  */
 public class GroupInfo {
 
+    //CHECKING
     private String name;
 
     List<NodeInfo> nodes;
