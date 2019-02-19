@@ -491,6 +491,7 @@ public class StorageNode implements RequestListener{
 		if (fsName != null) {
 			GeospatialFileSystem gfs = (GeospatialFileSystem) fsMap.get(fsName);
 			if (gfs != null) {
+				// THIS IS A SINGLE CHUNK'S DATA COMING IN FOR PROCESSING
 				StoreMessage msg = new StoreMessage(Type.UNPROCESSED, request.getData(), gfs, fsName);
 				msg.setCheckAll(request.checkAll());
 				dataStoreHandler.addMessage(msg);
@@ -498,6 +499,7 @@ public class StorageNode implements RequestListener{
 		}		
 	}
 		
+	// IDENTICAL TO handleNonBlockStorageRequest
 	public void handleLocalNonBlockStorageRequest(NonBlockStorageRequest request) throws IOException {
 		String fsName = request.getFS();
 		if (fsName != null) {
