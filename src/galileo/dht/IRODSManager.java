@@ -100,8 +100,7 @@ public class IRODSManager {
 			try {
 				remoteDir.mkdirs();
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
-			}
-			catch(UnixFileCreateException e) {
+			} catch(UnixFileCreateException e) {
 				logger.info("UnixFileCreateException caught, trying again.");
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
 			}//shouldn't need to catch overwrite exceptions now...
@@ -110,8 +109,7 @@ public class IRODSManager {
 				remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
 				remoteDir.mkdirs();
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
-			}
-			catch (OverwriteException | JargonFileOrCollAlreadyExistsException | DuplicateDataException e){//append to existing file
+			} catch (OverwriteException | JargonFileOrCollAlreadyExistsException | DuplicateDataException e){//append to existing file
 				logger.severe("CAUGHT OVERWRITE EXCEPTION!");
 				//Get existing file, append to it locally, then put with a forced overwrite
 				//Corner case: One thread begins to put, and file exists but is in incomplete state. Meanwhile,

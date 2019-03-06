@@ -331,7 +331,10 @@ public class DataIngestor extends Thread{
 						// DATA IS COMPRESSED BEFORE BEING SENT OUT
 						byte[] compressed = Snappy.compress(data);
 						SamplerResponse response = sampler.sample(this.sn.getGlobalGrid(), data);
+						
+						// HOW MANY RECORDS FALL IN WHICH DESTINATION
 						HashMap<NodeInfo, Integer> dests = response.getNodeMap();
+						
 						if (dests.keySet().size() == 1) {//all data belongs to one node
 							Map.Entry<NodeInfo,Integer> entry = dests.entrySet().iterator().next();
 							NodeInfo dest = entry.getKey();

@@ -108,6 +108,7 @@ public class DataStoreHandler {
 		
 		// SCHEDULE PLOT DATA BACKER AT 10 SEC INTERVALS
 		// JUST PERFORMS LOCAL BACKUP OF DATA COLLECTED
+		// SCRAPES WHATEVER IS LEFT IN PLOTIFTOCHUNKS AND ENSURES THAT THEY ARE SAVED
 		mapClearer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
@@ -149,6 +150,8 @@ public class DataStoreHandler {
 		IRODSReadyChecker.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
+				
+				// MESSAGE PROCESSING HAS STAYED IDLE FOR MORE THAN 5 MINS
 				if (System.currentTimeMillis() - lastMessageTime >= 300*1000) { 
 					
 					//If 5 minutes has passed since last message processed, data is ready to be sent to IRODS
