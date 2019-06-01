@@ -108,7 +108,7 @@ public class DataStoreHandler {
 		
 		// SCHEDULE PLOT DATA BACKER AT 10 SEC INTERVALS
 		// JUST PERFORMS LOCAL BACKUP OF DATA COLLECTED
-		// SCRAPES WHATEVER IS LEFT IN PLOTIFTOCHUNKS AND ENSURES THAT THEY ARE SAVED
+		// SCRAPES WHATEVER IS LEFT IN PLOTIDTOCHUNKS AND ENSURES THAT THEY ARE SAVED
 		mapClearer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
@@ -334,6 +334,7 @@ public class DataStoreHandler {
 				//First ensure that this point in fact belongs on this node
 				NodeInfo dest = ((SpatialHierarchyPartitioner)gfs.getPartitioner()).locateHashVal(GeoHash.encode(coords, grid.getPrecision()));
 				if (dest.getHostname().equals(sn.getHostName())) {
+						// INSERT INTO THE PLOTIDTOCHUNKS MAP
 						plotIDToChunks.computeIfAbsent(plotID, k -> new TimeStampedBuffer(new StringBuilder()));
 						plotIDToChunks.get(plotID).update(line+lineSep);
 						synchronized(plotIDToChunks.get(plotID)) {
@@ -342,6 +343,7 @@ public class DataStoreHandler {
 							// OTHERWISE PERSIST IT IN plotIDToChunks
 							if (plotIDToChunks.get(plotID) != null && plotIDToChunks.get(plotID).getBuffer().split(lineSep).length >= 500) {//this threshold is subject to change!
 								//add to existing block for the plot identified
+								// THIS IS BEING STORED IN LOCAL, ALTHOUGH IT SAYS IRODS MSG
 								StoreMessage irodsMsg = new StoreMessage(Type.TO_LOCAL, plotIDToChunks.get(plotID).getBuffer(), gfs, msg.getFSName(), plotID);
 								unProcessedMessages.add(irodsMsg);
 								plotIDToChunks.remove(plotID);

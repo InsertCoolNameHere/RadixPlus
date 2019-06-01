@@ -241,6 +241,9 @@ public class DataIngestor extends Thread{
 		long linesCounted = 0;
 		long lineCount = 0;
 		long numMsgs = 0;
+		
+		logger.info("RIKI: RECEIVED INPUT FILE...ABOUT TO READ IT: "+filePath);
+		
 		@SuppressWarnings("resource")// inChannel is closed, which in turn closes RandomAccessFile, safely ignore warning
 		FileChannel  inChannel = new RandomAccessFile(filePath, "r").getChannel();
 		StringBuilder chunk = new StringBuilder();
