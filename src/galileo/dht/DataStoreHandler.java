@@ -320,9 +320,11 @@ public class DataStoreHandler {
 			GeospatialFileSystem gfs = msg.getFS();
 			HashMap<NodeInfo, String> otherDests = new HashMap<>();//to be used for mapping data points to other destinations
 			HashGrid grid = sn.getGlobalGrid();
+			
 			for (String line : lines) {
-				double lat = Double.parseDouble(line.split(",")[2]);
-				double lon = Double.parseDouble(line.split(",")[1]);
+				
+				double lat = Double.parseDouble(line.split(",")[gfs.getLatIndex()]);
+				double lon = Double.parseDouble(line.split(",")[gfs.getLonIndex()]);
 				Coordinates coords = new Coordinates(lat, lon);
 				int plotID;
 				try {
@@ -350,9 +352,17 @@ public class DataStoreHandler {
 							}
 						}
 						String [] firstLine = lines[0].split(",");
+						
 						String timestamp = firstLine[0];
-						Date parsedDate = formatter.parse(timestamp);
-						cal.setTime(parsedDate);
+						
+						if(gfs.isTimeIsEpoch()) {
+							cal = GeoHash.getCalendarFromTimestamp(timestamp, true);
+						} else {
+						
+							Date parsedDate = formatter.parse(timestamp);
+							cal.setTime(parsedDate);
+						}
+						
 						int month = cal.get(Calendar.MONTH) + 1;//add 1 because Calendar class months are 0 based (i.e Jan=0, Feb=1...) but we need human readable month
 						int year = cal.get(Calendar.YEAR);
 						int dayOfMonth = cal.get(Calendar.DAY_OF_MONTH);
@@ -438,6 +448,9 @@ public class DataStoreHandler {
 			//Then in a temporary file, write the actual data. This temporary file will hold the raw data
 			//until all nodes have fully processed incoming messages, at which point this data will be joined
 			//with all other data of the same plot.
+			GeospatialFileSystem fs = msg.getFS();
+			int temporalIndex = fs.getTemporalIndex();
+			
 			long start = System.currentTimeMillis();
 			try {
 				// DATA FROM THE BUFFER
@@ -448,16 +461,27 @@ public class DataStoreHandler {
 				Arrays.sort(sortedLines, new Comparator<String>() {
 				    @Override
 				    public int compare(String o1, String o2) {
-				    	SimpleDateFormat formatter = new SimpleDateFormat("EEE MMM dd kk:mm:ss.SSS z yyyy");//need to change if timestamp format changes
-						Date d1 = null, d2 = null;
-						try {
-							d1 = formatter.parse(o1.split(",")[0]);
-							d2 = formatter.parse(o2.split(",")[0]);
-						} catch (ParseException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-						return d1.compareTo(d2);
+				    	
+				    	if(fs.isTimeIsEpoch()) {
+				    		Date d1 = null, d2 = null;
+						
+							d1 = new Date(Long.valueOf(o1.split(",")[temporalIndex]));
+							d2 = new Date(Long.valueOf(o2.split(",")[temporalIndex]));
+						
+							return d1.compareTo(d2);
+				    		
+				    	} else {
+					    	SimpleDateFormat formatter = new SimpleDateFormat("EEE MMM dd kk:mm:ss.SSS z yyyy");//need to change if timestamp format changes
+							Date d1 = null, d2 = null;
+							try {
+								d1 = formatter.parse(o1.split(",")[temporalIndex]);
+								d2 = formatter.parse(o2.split(",")[temporalIndex]);
+							} catch (ParseException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+							return d1.compareTo(d2);
+				    	}
 				    }
 				});
 				
@@ -469,7 +493,7 @@ public class DataStoreHandler {
 				
 				// DATA FROM BUFFER SORTED BASED ON TIMESTAMP
 				data = newData.toString().trim();
-				Metadata meta = createMeta(msg.getPlotID(), data);
+				Metadata meta = createMeta(msg.getPlotID(), data, temporalIndex);
 				
 //				String IRODSPath = path to file, without actual file name. File name is used from localfile
 				String IRODSPath = meta.getName().replaceAll("-", File.separator);
@@ -509,11 +533,11 @@ public class DataStoreHandler {
 			
 		}
 		
-		private Metadata createMeta(int plotID, String data) throws ParseException {
+		private Metadata createMeta(int plotID, String data, int temporalIndex) throws ParseException {
 			Metadata meta = new Metadata();
 			String[] dataLines = data.split(System.lineSeparator());
 			String [] firstLine = dataLines[0].split(",");
-			String timestamp = firstLine[0];
+			String timestamp = firstLine[temporalIndex];
 			SimpleDateFormat formatter = new SimpleDateFormat("EEE MMM dd kk:mm:ss.SSS z yyyy");//need to change if timestamp format changes
 			Date parsedDate = formatter.parse(timestamp);
 			Calendar cal = Calendar.getInstance();

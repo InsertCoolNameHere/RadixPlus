@@ -29,8 +29,12 @@ import java.awt.Rectangle;
 import java.awt.geom.Area;
 import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -41,6 +45,7 @@ import java.util.Set;
 import galileo.dataset.Coordinates;
 import galileo.dataset.Point;
 import galileo.dataset.SpatialRange;
+import galileo.dht.hash.TemporalHash;
 import geo.main.java.com.github.davidmoten.geo.GeoHashUtils;
 
 /**
@@ -580,4 +585,35 @@ public class GeoHash {
 			}
 		}
 	}
+	
+	
+	public static void main(String arg[]) throws ParseException {
+		
+		
+		Calendar cal = getCalendarFromTimestamp("1559436734", true);
+		
+		int month = cal.get(Calendar.MONTH) + 1;//add 1 because Calendar class months are 0 based (i.e Jan=0, Feb=1...) but we need human readable month
+		int year = cal.get(Calendar.YEAR);
+		int dayOfMonth = cal.get(Calendar.DAY_OF_MONTH);
+		System.out.println(year+"-"+month+"-"+dayOfMonth);
+	}
+	
+	
+	public static Calendar getCalendarFromTimestamp(String timeString, boolean isEpoch) {
+		
+		long timeStamp = Long.valueOf(timeString);
+		
+		if(timeString.length() < 13)
+			timeStamp*=1000;
+		
+		Calendar calendar = Calendar.getInstance();
+		calendar.setTimeZone(TemporalHash.TIMEZONE);
+		calendar.setTimeInMillis(timeStamp);
+		
+		return calendar;
+		
+	}
+	
+	
+	
 }

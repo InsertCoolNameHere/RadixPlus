@@ -139,6 +139,11 @@ public class GeospatialFileSystem extends FileSystem {
 	private String latestSpace;
 	private String earliestSpace;
 	private Set<String> geohashIndex;
+	
+	private int temporalIndex = 0;
+	private int latIndex = 2;
+	private int lonIndex = 1;
+	private boolean timeIsEpoch = true;
 
 	private static final String TEMPORAL_YEAR_FEATURE = "x__year__x";
 	private static final String TEMPORAL_MONTH_FEATURE = "x__month__x";
@@ -1162,5 +1167,37 @@ public class GeospatialFileSystem extends FileSystem {
 			/* Everything is going down here, just print out the error */
 			e.printStackTrace();
 		}
+	}
+
+	public int getTemporalIndex() {
+		return temporalIndex;
+	}
+
+	public void setTemporalIndex(int temporalIndex) {
+		this.temporalIndex = temporalIndex;
+	}
+
+	public int getLatIndex() {
+		return latIndex;
+	}
+
+	public void setLatIndex(int latIndex) {
+		this.latIndex = latIndex;
+	}
+
+	public int getLonIndex() {
+		return lonIndex;
+	}
+
+	public void setLonIndex(int lonIndex) {
+		this.lonIndex = lonIndex;
+	}
+
+	public boolean isTimeIsEpoch() {
+		return timeIsEpoch;
+	}
+
+	public void setTimeIsEpoch(boolean timeIsEpoch) {
+		this.timeIsEpoch = timeIsEpoch;
 	}
 }
