@@ -61,6 +61,7 @@ public class Connector implements MessageListener {
 		logger.fine("Request sent. Waiting for response");
 		try {
 			this.latch = new CountDownLatch(1);
+			logger.info("RIKI: Latch Initialized");
 			this.latch.await();
 		} catch (InterruptedException e) {
 			throw e;
@@ -71,7 +72,18 @@ public class Connector implements MessageListener {
 	@Override
 	public void onMessage(GalileoMessage message) {
 		try {
-			logger.fine("Obtained response from Galileo");
+			logger.info("RIKI: Obtained response from Galileo");
+			
+			Event event = this.wrapper.unwrap(message);
+			
+			if(event instanceof IRODSReadyCheckRequest) {
+				logger.info("RIKI: REQ FROM ANOTHER NODE");
+			} else if (event instanceof IRODSReadyCheckResponse) {
+				logger.info("RIKI: RESPONSE RECEIVED");
+			} else {
+				logger.info("RIKI: SOMETHING ELSE RECEIVED");
+			}
+			
 			this.response = wrapper.unwrap(message);
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "failed to get the response from Galileo", e);

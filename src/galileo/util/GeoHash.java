@@ -29,6 +29,9 @@ import java.awt.Rectangle;
 import java.awt.geom.Area;
 import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -41,6 +44,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import galileo.dataset.Coordinates;
 import galileo.dataset.Point;
@@ -587,15 +593,22 @@ public class GeoHash {
 	}
 	
 	
-	public static void main(String arg[]) throws ParseException {
+	public static void main(String arg[]) throws ParseException, IOException {
 		
-		
+		/*
 		Calendar cal = getCalendarFromTimestamp("1559436734", true);
 		
 		int month = cal.get(Calendar.MONTH) + 1;//add 1 because Calendar class months are 0 based (i.e Jan=0, Feb=1...) but we need human readable month
 		int year = cal.get(Calendar.YEAR);
 		int dayOfMonth = cal.get(Calendar.DAY_OF_MONTH);
 		System.out.println(year+"-"+month+"-"+dayOfMonth);
+		
+		*/
+		
+		//System.out.println(encode(40.6500868715d, -104.993802512d, 11));
+		
+		getLongestSubstring("/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/plots_new.json");
+		
 	}
 	
 	
@@ -614,6 +627,104 @@ public class GeoHash {
 		
 	}
 	
+	
+	public static void getLongestSubstring(String filepath) throws IOException {
+		
+		String longestSubstr = "";
+		boolean starting = true;
+		
+		
+		String plots = new String(Files.readAllBytes(Paths.get(filepath)));
+		JSONObject plotJson = new JSONObject(plots);
+		JSONArray geometries = (JSONArray)plotJson.get("features");
+		
+		for (Object o : geometries){
+			//coords = all coordinates belonging to current object in iteration, length=1
+			JSONArray coords = ((JSONArray)((JSONObject)((JSONObject)o).get("geometry")).get("coordinates"));
+			JSONArray firstCoord = (JSONArray)((JSONArray)coords.get(0)).get(0);
+			
+			ArrayList<Coordinates> polyPoints = new ArrayList<>();
+			polyPoints.add(new Coordinates((double)firstCoord.get(1), (double)firstCoord.get(0)));
+			for (int i = 1; i < ((JSONArray)coords.get(0)).length(); i++){
+				double lat = ((JSONArray)((JSONArray)coords.get(0)).get(i)).getDouble(0);
+				double lon = ((JSONArray)((JSONArray)coords.get(0)).get(i)).getDouble(1);
+				polyPoints.add(new Coordinates(lat, lon));
+			}
+			
+			double[][] coordArr = listToArr(polyPoints);
+			Set<String> coverage = GeoHashUtils.geoHashesForPolygon(11, coordArr);
+
+			for (String ghash : coverage) {
+				
+				if(starting) {
+					longestSubstr = ghash;
+					starting = false;
+				} else {
+					longestSubstr = greatestCommonPrefix(longestSubstr, ghash);
+				}
+				
+				
+			}
+		}
+		
+		System.out.println(longestSubstr);
+	}
+	
+	public static String greatestCommonPrefix(String a, String b) {
+	    int minLength = java.lang.Math.min(a.length(), b.length());
+	    for (int i = 0; i < minLength; i++) {
+	        if (a.charAt(i) != b.charAt(i)) {
+	            return a.substring(0, i);
+	        }
+	    }
+	    return a.substring(0, minLength);
+	}
+	
+	public static double[][] listToArr(List<Coordinates> coords){
+		double [][] coordArr = new double[coords.size()][2];
+		for (int i = 0; i < coords.size(); i++) {
+			coordArr[i] = new double[] {coords.get(i).getLongitude(), coords.get(i).getLatitude()};
+		}
+		return coordArr;
+	}
+	
+	
+	public static String[] getIntersectingGeohashesForConvexBoundingPolygon(List<Coordinates> polygon, int precision) {
+		Set<String> hashes = new HashSet<String>();
+		Polygon geometry = new Polygon();
+		for (Coordinates coords : polygon) {
+			Point<Integer> point = coordinatesToXY(coords);
+			geometry.addPoint(point.X(), point.Y());
+		}
+		Coordinates spatialCenter = new SpatialRange(polygon).getCenterPoint();
+		Rectangle2D box = geometry.getBounds2D();
+		String geohash = encode(spatialCenter, precision);
+		Queue<String> hashQue = new LinkedList<String>();
+		Set<String> computedHashes = new HashSet<String>();
+		hashQue.offer(geohash);
+		while (!hashQue.isEmpty()) {
+			String hash = hashQue.poll();
+			computedHashes.add(hash);
+			SpatialRange hashRange = decodeHash(hash);
+			Pair<Coordinates, Coordinates> coordsPair = hashRange.get2DCoordinates();
+			Point<Integer> upLeft = coordinatesToXY(coordsPair.a);
+			Point<Integer> lowRight = coordinatesToXY(coordsPair.b);
+			Rectangle2D hashRect = new Rectangle(upLeft.X(), upLeft.Y(), lowRight.X() - upLeft.X(),
+					lowRight.Y() - upLeft.Y());
+			if (hash.equals(geohash) && hashRect.contains(box)) {
+				hashes.add(hash);
+				break;
+			} 
+			if (geometry.intersects(hashRect)) {
+				hashes.add(hash);
+				String[] neighbors = getNeighbours(hash);
+				for (String neighbour : neighbors)
+					if (!computedHashes.contains(neighbour) && !hashQue.contains(neighbour))
+						hashQue.offer(neighbour);
+			}
+		}
+		return hashes.size() > 0 ? hashes.toArray(new String[hashes.size()]) : new String[] {};
+	}
 	
 	
 }

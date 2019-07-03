@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -66,7 +67,8 @@ import org.xerial.snappy.Snappy;
 import galileo.bmp.BitmapException;
 import galileo.bmp.HashGrid;
 import galileo.comm.Connector;
-import galileo.comm.IRODSReadyCheck;
+import galileo.comm.IRODSReadyCheckRequest;
+import galileo.comm.IRODSReadyCheckResponse;
 import galileo.comm.IRODSRequest;
 import galileo.comm.IRODSRequest.TYPE;
 import galileo.comm.NonBlockStorageRequest;
@@ -99,8 +101,10 @@ public class DataStoreHandler {
 	private long lastMessageTime;
 	private IRODSManager subterra;
 	private Connector connector;
-	private File messageLogger = new File("/s/bach/j/under/mroseliu/Documents/systemPerf/throughput.txt");
+	private File messageLogger = new File("/s/chopin/b/grad/sapmitra/Documents/systemPerf/throughput.txt");
 	private BufferedWriter bw;
+	
+	public static int irodsCheckTimeSecs = 30;
 	
 	public DataStoreHandler(StorageNode sn) {
 		
@@ -146,13 +150,17 @@ public class DataStoreHandler {
 		}, 10 * 1000, 10 * 1000);
 		
 		// THIS IS FOR IRODS STORAGE
-		// READS THE TEMPORARY GALILEO FILE WITH BACKED UP RECORDS AND SENDS IT TO IRIDS FOR STORAGE
+		// READS THE TEMPORARY GALILEO FILE WITH BACKED UP RECORDS AND SENDS IT TO IRODS FOR STORAGE
+		// ALSO COMBINES DATA FROM ALL PLOTS FROM ALL NODES INTO ONE NODE
 		IRODSReadyChecker.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
 				
+				logger.info("RIKI: IRODS INSERTION ABOUT TO START");
 				// MESSAGE PROCESSING HAS STAYED IDLE FOR MORE THAN 5 MINS
-				if (System.currentTimeMillis() - lastMessageTime >= 300*1000) { 
+				if (System.currentTimeMillis() - lastMessageTime >= irodsCheckTimeSecs*1000) { 
+					
+					logger.info("RIKI: IRODS INSERTION IDLE CONDITION MET");
 					
 					//If 5 minutes has passed since last message processed, data is ready to be sent to IRODS
 					//First check if all other machines are ready				
@@ -163,13 +171,16 @@ public class DataStoreHandler {
 						String nodeFile = SystemConfig.getNetworkConfDir() + File.separator + "hostnames";
 						String [] hosts = new String(Files.readAllBytes(Paths.get(nodeFile))).split(System.lineSeparator());
 						
+						logger.info("RIKI: NODES FILE "+ nodeFile);
+						logger.info("RIKI: NODES ARE "+ hosts[0] +" "+hosts[1]+" "+hosts.length);
 						// CHECKS IF ALL NODES ARE READY TO RECEIVE DATA FIRST
 						// NODES ARE READY IF IT HAS BEEN 10 MINUTES SINCE LAST MESSAGE
-						for (Event e : broadcastEvent(new IRODSReadyCheck(IRODSReadyCheck.Type.CHECK), connector)) {
-							if (!((IRODSReadyCheck)e).isReady())
+						for (Event e : broadcastEvent(new IRODSReadyCheckRequest(IRODSReadyCheckRequest.Type.CHECK), connector)) {
+							if (!((IRODSReadyCheckResponse)e).isReady())
 								allReady = false;
 						}
 						
+						logger.info("RIKI: NODES ARE ALL READY "+ allReady);
 						//IF ALL NODES ARE READY, initiate IRODS transfer phase
 						if (allReady) {
 							//default coordinator is last machine on list
@@ -184,8 +195,10 @@ public class DataStoreHandler {
 								IRODSRequest reply = (IRODSRequest)connector.sendMessage(coordinator, new IRODSRequest(TYPE.LOCK_REQUEST, entry.getKey()));
 								
 								// IF LOCK FOR THE REQUESTED PLOTS IS GRANTED BY THE COORDINATOR NODE
+								// MEANS THIS NODE WILL HANDLE SUBMISSION OF ALL DATA FOR THIS PLOT
 								if (reply.getType() == TYPE.LOCK_ACQUIRED) {
 									
+									logger.info("RIKI: LOCK FOR PLOT "+entry.getKey()+"AQUIRED BY NODE: "+sn.getHostName());
 									//this machine gets privilege to write this plot file to IRODS.
 									//create a StoreMessage so a thread can deal with this task
 									
@@ -203,7 +216,7 @@ public class DataStoreHandler {
 					}
 				}
 			}
-		}, 300*1000, 300*1000); //300 seconds = 5 minutes
+		}, (irodsCheckTimeSecs+120)*1000, irodsCheckTimeSecs*1000); //300 seconds = 5 minutes
 		
 		unProcessedMessages = new PriorityBlockingQueue<>();
 		plotIDToChunks = new ConcurrentHashMap<>(100, .9f, 10);
@@ -250,6 +263,8 @@ public class DataStoreHandler {
 			NetworkDestination dest = new NetworkDestination(host.split(":")[0], Integer.parseInt(host.split(":")[1]));
 			
 			if (!host.split(":")[0].equals(sn.getHostName())) {//don't send event to self
+				
+				logger.info("RIKI: ABOUT TO CONTACT "+dest);
 				Event response = connector.sendMessage(dest, event);
 				responses.add(response);
 			}
@@ -273,6 +288,7 @@ public class DataStoreHandler {
 					long start = System.currentTimeMillis();
 					switch(toProcess.getType()){			
 						case UNPROCESSED:
+							logger.info("RIKI: ABOUT TO PROCESS AN UNPROCESSED MESSAGE");
 							handleUnprocessed(toProcess);
 							long end = System.currentTimeMillis() - start;
 							synchronized(unprocessedTimes) {
@@ -310,7 +326,8 @@ public class DataStoreHandler {
 			this.isAlive = false;
 		}
 		
-		
+		// THE DATA HERE IS A SET OF LINES, MOST OF WHICH BELONGS TO THIS NODE
+		// THE OTHERS NEED TO BE MAPPED TO THEIR RESPECTIVE NODES AND SHIPPED OFF
 		private void handleUnprocessed(StoreMessage msg) throws ParseException {
 			String data = msg.getData();
 			SimpleDateFormat formatter = new SimpleDateFormat("EEE MMM dd kk:mm:ss.SSS z yyyy");//need to change if timestamp format changes
@@ -335,10 +352,16 @@ public class DataStoreHandler {
 				}
 				//First ensure that this point in fact belongs on this node
 				NodeInfo dest = ((SpatialHierarchyPartitioner)gfs.getPartitioner()).locateHashVal(GeoHash.encode(coords, grid.getPrecision()));
+				
+				logger.info("RIKI: FOR ENTRY "+line+" DEST IS "+dest);
+				
 				if (dest.getHostname().equals(sn.getHostName())) {
 						// INSERT INTO THE PLOTIDTOCHUNKS MAP
 						plotIDToChunks.computeIfAbsent(plotID, k -> new TimeStampedBuffer(new StringBuilder()));
 						plotIDToChunks.get(plotID).update(line+lineSep);
+						
+						// IF NUMBEROF LINE FOR THIS PLOT CROSSES 500, CREATE AN IRODS MESSAGE OUT OF THEM,
+						// OTHERWISE KEEP ADDING THEM TO THE BUFFER
 						synchronized(plotIDToChunks.get(plotID)) {
 							
 							// WHEN THERE ARE MORE THAN 500 RECORDS FOR A PLOT, ATTEMPT TO STORE IT IN LOCAL GALILEO
@@ -346,8 +369,8 @@ public class DataStoreHandler {
 							if (plotIDToChunks.get(plotID) != null && plotIDToChunks.get(plotID).getBuffer().split(lineSep).length >= 500) {//this threshold is subject to change!
 								//add to existing block for the plot identified
 								// THIS IS BEING STORED IN LOCAL, ALTHOUGH IT SAYS IRODS MSG
-								StoreMessage irodsMsg = new StoreMessage(Type.TO_LOCAL, plotIDToChunks.get(plotID).getBuffer(), gfs, msg.getFSName(), plotID);
-								unProcessedMessages.add(irodsMsg);
+								StoreMessage localNIrodsStorageMsg = new StoreMessage(Type.TO_LOCAL, plotIDToChunks.get(plotID).getBuffer(), gfs, msg.getFSName(), plotID);
+								unProcessedMessages.add(localNIrodsStorageMsg);
 								plotIDToChunks.remove(plotID);
 							}
 						}
@@ -368,7 +391,9 @@ public class DataStoreHandler {
 						int dayOfMonth = cal.get(Calendar.DAY_OF_MONTH);
 						plotsProcessed.put(plotID, year+"-"+month+"-"+dayOfMonth);
 
-				}else {//the observation is to be stored on a machine other than this one
+				} else {//the observation is to be stored on a machine other than this one
+					
+					// MAPPING THE OTHER LINES TO THEIR RESPECTIVE NODES
 					if (!otherDests.keySet().contains(dest)) 
 						otherDests.put(dest, line+lineSep);
 					else
@@ -377,6 +402,7 @@ public class DataStoreHandler {
 			}
 			for(Map.Entry<NodeInfo,String> entry : otherDests.entrySet()) {
 				try {
+					logger.info("RIKI: NODE "+entry.getKey()+" WILL HANDLE THE FOLLOWING: "+entry.getValue());
 					byte [] compressed = Snappy.compress(entry.getValue());
 					NonBlockStorageRequest req = new NonBlockStorageRequest(compressed, msg.getFSName());
 					req.setCheckAll(false);
@@ -387,11 +413,20 @@ public class DataStoreHandler {
 			}
 		}
 		
+		/**
+		 * THIS TAKES THE TEMP FILES FROM GALILEO AND SENDS THEM TO IRODS SERVER
+		 * @author sapmitra
+		 * @param msg
+		 */
 		private void handleDataRequest(StoreMessage msg) {
 			try {
 				IRODSRequest dataRequest = new IRODSRequest(TYPE.DATA_REQUEST, msg.getPlotID());
 				dataRequest.setFilePath(msg.getFilePath());
+				
+				// ASKING OTHER NODES FOR DATA REGARDING THIS PLOT
+				// SINCE THIS NODE HAS RECEIVED PERMISSION TO SUBMIT ALL DATA FOR THIS PLOT
 				List<Event> responses = broadcastEvent(dataRequest, this.connector);
+				
 				StringBuilder plotData = new StringBuilder();
 				for (Event e : responses) {
 					IRODSRequest reply = (IRODSRequest)e;
@@ -401,7 +436,12 @@ public class DataStoreHandler {
 				File localPlotData = new File(msg.getFilePath());
 				String localContents = new String(Files.readAllBytes(Paths.get(localPlotData.getAbsolutePath())));
 				plotData.append(localContents);
+				
+				// NOW LOCALPLOTDATA HAS ALL THE DATA IN IT
 				localContents = plotData.toString().replaceAll("(?m)^\\s", "");//remove any extraneous new lines that found their way in
+				
+				// ALL DATA RELATED TO THIS PLOT FROM ALL NODES ON THIS NODE
+				
 				String [] sortedLines = localContents.split(System.lineSeparator());
 				Arrays.sort(sortedLines, new Comparator<String>() {
 				    @Override
@@ -417,15 +457,24 @@ public class DataStoreHandler {
 						return d1.compareTo(d2);
 				    }
 				});
+				
 				StringBuffer newData = new StringBuffer();
 				for (String line : sortedLines) {
 					newData.append(line);
 					newData.append(System.lineSeparator());
 				}
 				String sortedPlotData = newData.toString().trim();
+				
+				// OVERWRITING PARTIAL PLOT DATA WITH FULL DATA, COMBINED FROM ALL NODES
+				
+				logger.info("RIKI: WRITING OUT FULL PLOT DATA TO :"+localPlotData+" AT NODE: "+sn.getHostName());
+				
 				FileWriter overWriter = new FileWriter(localPlotData, false);
 				overWriter.write(sortedPlotData);
 				overWriter.close();
+				
+				// RIKI ACTUAL WRITING TO IRODS
+				logger.info("RIKI: COULD HAVE SENT TO IRODS, BUT DIDNT");
 				//Send off to IRODS
 //				if (msg.getPlotID() < 100)
 //					subterra.writeRemoteFile(localPlotData, this);
@@ -493,12 +542,14 @@ public class DataStoreHandler {
 				
 				// DATA FROM BUFFER SORTED BASED ON TIMESTAMP
 				data = newData.toString().trim();
-				Metadata meta = createMeta(msg.getPlotID(), data, temporalIndex);
+				Metadata meta = createMeta(msg.getPlotID(), data, temporalIndex, msg.getFS().isTimeIsEpoch());
 				
 //				String IRODSPath = path to file, without actual file name. File name is used from localfile
 				String IRODSPath = meta.getName().replaceAll("-", File.separator);
 				
-				// THE 'METADATA' OF THE BLOCK HAS THE ACTUAL DATA IN IT INSIDE THE 'ATTRIBUTES' VARIABLE
+				// THE 'METADATA' OF THE BLOCK HAS THE SUMMARY DATA IN IT INSIDE THE 'ATTRIBUTES' VARIABLE
+				// THE ACTUAL DATA GETS WRITTEN TO FILE TOWARDS THE END OF THIS FUNCTION
+				
 				//Create a block which contains the location of the raw data in IRODS
 				Block block = new Block(msg.getFSName(), meta, ("/iplant/radix_subterra/plots/" + IRODSPath+ "/" + meta.getName() + ".gblock").getBytes());
 //				Block block = new Block(msg.getFSName(), meta, data.getBytes());
@@ -513,6 +564,9 @@ public class DataStoreHandler {
 				
 				
 				// A TEMPORARY FILE IS ALSO SAVED IN GALILEO THAT SAVES THE ACTUAL BLOCK DATA
+				
+				// IRODS SENDING IS DONE THROUGH scheduleAtFixedRate
+				logger.info("RIKI: ABOUT TO WRITE OUT TO DAILYTEMP");
 				File tempDir = new File(SystemConfig.getRootDir() + File.separator + "dailyTemp/" + IRODSPath);
 				if (!tempDir.exists()) 
 					tempDir.mkdirs();
@@ -533,26 +587,61 @@ public class DataStoreHandler {
 			
 		}
 		
-		private Metadata createMeta(int plotID, String data, int temporalIndex) throws ParseException {
+		/**
+		 * 
+		 * @author sapmitra
+		 * @param plotID
+		 * @param data - THE ACTUAL DATA SORTED BY TIMESTAMP
+		 * @param temporalIndex
+		 * @return
+		 * @throws ParseException
+		 */
+		private Metadata createMeta(int plotID, String data, int temporalIndex, boolean isEpoch) throws ParseException {
 			Metadata meta = new Metadata();
 			String[] dataLines = data.split(System.lineSeparator());
 			String [] firstLine = dataLines[0].split(",");
-			String timestamp = firstLine[temporalIndex];
+			String[] lastLine = dataLines[dataLines.length-1].split(",");
+			
+			String first_timestamp = firstLine[temporalIndex];
+			String last_timestamp = lastLine[temporalIndex];
+			
+			
+			
+			if(isEpoch) {
+				Calendar cal1 = Calendar.getInstance();
+				cal1 = GeoHash.getCalendarFromTimestamp(first_timestamp, true);
+				Date date = cal1.getTime();
+				DateFormat dateFormat = new SimpleDateFormat("EEE MMM dd kk:mm:ss.SSS z yyyy");
+				first_timestamp = dateFormat.format(date);
+				
+				Calendar cal2 = Calendar.getInstance();
+				cal2 = GeoHash.getCalendarFromTimestamp(last_timestamp, true);
+				Date dateL = cal2.getTime();
+				last_timestamp = dateFormat.format(dateL);
+			}
+			
+			
 			SimpleDateFormat formatter = new SimpleDateFormat("EEE MMM dd kk:mm:ss.SSS z yyyy");//need to change if timestamp format changes
-			Date parsedDate = formatter.parse(timestamp);
+			Date parsedDate = formatter.parse(first_timestamp);
 			Calendar cal = Calendar.getInstance();
 			cal.setTime(parsedDate);
+			
 			int month = cal.get(Calendar.MONTH) + 1;//add 1 because Calendar class months are 0 based (i.e Jan=0, Feb=1...) but we need human readable month
 			int year = cal.get(Calendar.YEAR);
 			int dayOfMonth = cal.get(Calendar.DAY_OF_MONTH);
 			meta.setName("" + plotID + "-" + year + "-" + month + "-" + dayOfMonth);
-			String [] sorted = data.split(System.lineSeparator());
-			String first = sorted[0], last = sorted[sorted.length-1];
-			long firstTime = formatter.parse(first.split(",")[0]).getTime();
-			long lastTime = formatter.parse(last.split(",")[0]).getTime();
+			//String [] sorted = data.split(System.lineSeparator());
+			
+			// FIRST AND LAST RECORD
+			//String first = sorted[0], last = sorted[sorted.length-1];
+			String first = dataLines[0], last = dataLines[dataLines.length-1];
+			
+			long firstTime = formatter.parse(first_timestamp).getTime();
+			long lastTime = formatter.parse(last_timestamp).getTime();
 			if (firstTime == lastTime)
 				lastTime ++;// a hack to get around data chunks with only one item (add 1ms to end time)
 			meta.setTemporalProperties(new TemporalProperties(firstTime, lastTime));
+			
 			FeatureSet attributes = createAttributes(data);
 			attributes.put(new Feature("plotID", plotID));
 			attributes.put(new Feature("date", year+"-"+month+"-"+dayOfMonth));
@@ -567,63 +656,83 @@ public class DataStoreHandler {
 		private FeatureSet createAttributes(String data) {
 			//Assuming features are: CO2, Temperature, Humidity
 			FeatureSet attributes = new FeatureSet();
-			ArrayList<Double> CO2 = new ArrayList<>();
-			ArrayList<Double> temperatures = new ArrayList<>();
-			ArrayList<Double> humidities = new ArrayList<>();
+			
+			// vegetation indices
+			ArrayList<Double> ndvis = new ArrayList<>();
+			ArrayList<Double> osavis = new ArrayList<>();
+			
+			// reflective indices
+			ArrayList<Double> b0s = new ArrayList<>();
+			ArrayList<Double> b1s = new ArrayList<>();
+			ArrayList<Double> b2s = new ArrayList<>();
+			ArrayList<Double> b3s = new ArrayList<>();
+			ArrayList<Double> b4s = new ArrayList<>();
+			ArrayList<Double> b5s = new ArrayList<>();
+			
 			String [] lines = data.split(System.lineSeparator());
-			ArrayList <Double> rand1 = new ArrayList<>();
-			ArrayList<Double> rand2 = new ArrayList<>();
-			ArrayList<Double> rand3 = new ArrayList<>();
-			ArrayList<Double> rand4 = new ArrayList<>();
+			
+			
+			// READING LINE BY LINE
 			for (String line : lines) {
 				if (line.isEmpty())
 					continue;//don't process an empty line which may have found its way into the data chunk
 				String [] obs = line.split(",");
-				temperatures.add(Double.parseDouble(obs[4]));
-				humidities.add(Double.parseDouble(obs[5]));
-				CO2.add(Double.parseDouble(obs[6]));
-				rand1.add(Double.parseDouble(obs[8]));
-				rand2.add(Double.parseDouble(obs[9]));
-				rand3.add(Double.parseDouble(obs[10]));
-				rand4.add(Double.parseDouble(obs[11]));
+				
+				
+				b0s.add(Double.parseDouble(obs[3]));
+				b1s.add(Double.parseDouble(obs[4]));
+				b2s.add(Double.parseDouble(obs[5]));
+				b3s.add(Double.parseDouble(obs[6]));
+				b4s.add(Double.parseDouble(obs[7]));
+				b5s.add(Double.parseDouble(obs[8]));
+				
+				ndvis.add(Double.parseDouble(obs[13]));
+				osavis.add(Double.parseDouble(obs[14]));
+				
 			}
 			
 			//For each of CO2, temp, humidity, compute avg, max, min, std. dev as attributes of this data
-			attributes.put(new Feature("min_temperature", Collections.min(temperatures)));
-			attributes.put(new Feature("max_temperature", Collections.max(temperatures)));
-			attributes.put(new Feature("avg_temperature", galileo.util.Math.computeAvg(temperatures)));
-			attributes.put(new Feature("std_temperature", galileo.util.Math.computeStdDev(temperatures)));
+			attributes.put(new Feature("min_osavi", Collections.min(osavis)));
+			attributes.put(new Feature("max_osavi", Collections.max(osavis)));
+			attributes.put(new Feature("avg_osavi", galileo.util.Math.computeAvg(osavis)));
+			attributes.put(new Feature("std_osavi", galileo.util.Math.computeStdDev(osavis)));
 			
-			attributes.put(new Feature("min_humidity", Collections.min(humidities)));
-			attributes.put(new Feature("max_humidity", Collections.max(humidities)));
-			attributes.put(new Feature("avg_humidity", galileo.util.Math.computeAvg(humidities)));
-			attributes.put(new Feature("std_humidity", galileo.util.Math.computeStdDev(humidities)));
+			attributes.put(new Feature("min_ndvi", Collections.min(ndvis)));
+			attributes.put(new Feature("max_ndvi", Collections.max(ndvis)));
+			attributes.put(new Feature("avg_ndvi", galileo.util.Math.computeAvg(ndvis)));
+			attributes.put(new Feature("std_ndvi", galileo.util.Math.computeStdDev(ndvis)));
 			
 			
-			attributes.put(new Feature("min_CO2", Collections.min(CO2)));
-			attributes.put(new Feature("max_CO2", Collections.max(CO2)));
-			attributes.put(new Feature("avg_CO2", galileo.util.Math.computeAvg(CO2)));
-			attributes.put(new Feature("std_CO2", galileo.util.Math.computeStdDev(CO2)));
+			attributes.put(new Feature("min_b0", Collections.min(b0s)));
+			attributes.put(new Feature("max_b0", Collections.max(b0s)));
+			attributes.put(new Feature("avg_b0", galileo.util.Math.computeAvg(b0s)));
+			attributes.put(new Feature("std_b0", galileo.util.Math.computeStdDev(b0s)));
 			
-			attributes.put(new Feature("min_r1", Collections.min(rand1)));
-			attributes.put(new Feature("max_r1", Collections.max(rand1)));
-			attributes.put(new Feature("avg_r1", galileo.util.Math.computeAvg(rand1)));
-			attributes.put(new Feature("std_r1", galileo.util.Math.computeStdDev(rand1)));
+			attributes.put(new Feature("min_b1", Collections.min(b1s)));
+			attributes.put(new Feature("max_b1", Collections.max(b1s)));
+			attributes.put(new Feature("avg_b1", galileo.util.Math.computeAvg(b1s)));
+			attributes.put(new Feature("std_b1", galileo.util.Math.computeStdDev(b1s)));
 			
-			attributes.put(new Feature("min_r2", Collections.min(rand2)));
-			attributes.put(new Feature("max_r2", Collections.max(rand2)));
-			attributes.put(new Feature("avg_r2", galileo.util.Math.computeAvg(rand2)));
-			attributes.put(new Feature("std_r2", galileo.util.Math.computeStdDev(rand2)));
+			attributes.put(new Feature("min_b2", Collections.min(b2s)));
+			attributes.put(new Feature("max_b2", Collections.max(b2s)));
+			attributes.put(new Feature("avg_b2", galileo.util.Math.computeAvg(b2s)));
+			attributes.put(new Feature("std_b2", galileo.util.Math.computeStdDev(b2s)));
 			
-			attributes.put(new Feature("min_r3", Collections.min(rand3)));
-			attributes.put(new Feature("max_r3", Collections.max(rand3)));
-			attributes.put(new Feature("avg_r3", galileo.util.Math.computeAvg(rand3)));
-			attributes.put(new Feature("std_r3", galileo.util.Math.computeStdDev(rand3)));
+			attributes.put(new Feature("min_b3", Collections.min(b3s)));
+			attributes.put(new Feature("max_b3", Collections.max(b3s)));
+			attributes.put(new Feature("avg_b3", galileo.util.Math.computeAvg(b3s)));
+			attributes.put(new Feature("std_b3", galileo.util.Math.computeStdDev(b3s)));
 			
-			attributes.put(new Feature("min_r4", Collections.min(rand4)));
-			attributes.put(new Feature("max_r4", Collections.max(rand4)));
-			attributes.put(new Feature("avg_r4", galileo.util.Math.computeAvg(rand4)));
-			attributes.put(new Feature("std_r4", galileo.util.Math.computeStdDev(rand4)));
+			
+			attributes.put(new Feature("min_b4", Collections.min(b4s)));
+			attributes.put(new Feature("max_b4", Collections.max(b4s)));
+			attributes.put(new Feature("avg_b4", galileo.util.Math.computeAvg(b4s)));
+			attributes.put(new Feature("std_b4", galileo.util.Math.computeStdDev(b4s)));
+			
+			attributes.put(new Feature("min_b5", Collections.min(b5s)));
+			attributes.put(new Feature("max_b5", Collections.max(b5s)));
+			attributes.put(new Feature("avg_b5", galileo.util.Math.computeAvg(b5s)));
+			attributes.put(new Feature("std_b5", galileo.util.Math.computeStdDev(b5s)));
 			
 			attributes.put(new Feature("count", lines.length));
 
@@ -631,6 +740,74 @@ public class DataStoreHandler {
 			
 		}
 	}
+	
+	private FeatureSet createAttributes_backup(String data) {
+		//Assuming features are: CO2, Temperature, Humidity
+		FeatureSet attributes = new FeatureSet();
+		ArrayList<Double> CO2 = new ArrayList<>();
+		ArrayList<Double> temperatures = new ArrayList<>();
+		ArrayList<Double> humidities = new ArrayList<>();
+		String [] lines = data.split(System.lineSeparator());
+		ArrayList <Double> rand1 = new ArrayList<>();
+		ArrayList<Double> rand2 = new ArrayList<>();
+		ArrayList<Double> rand3 = new ArrayList<>();
+		ArrayList<Double> rand4 = new ArrayList<>();
+		for (String line : lines) {
+			if (line.isEmpty())
+				continue;//don't process an empty line which may have found its way into the data chunk
+			String [] obs = line.split(",");
+			temperatures.add(Double.parseDouble(obs[4]));
+			humidities.add(Double.parseDouble(obs[5]));
+			CO2.add(Double.parseDouble(obs[6]));
+			rand1.add(Double.parseDouble(obs[8]));
+			rand2.add(Double.parseDouble(obs[9]));
+			rand3.add(Double.parseDouble(obs[10]));
+			rand4.add(Double.parseDouble(obs[11]));
+		}
+		
+		//For each of CO2, temp, humidity, compute avg, max, min, std. dev as attributes of this data
+		attributes.put(new Feature("min_temperature", Collections.min(temperatures)));
+		attributes.put(new Feature("max_temperature", Collections.max(temperatures)));
+		attributes.put(new Feature("avg_temperature", galileo.util.Math.computeAvg(temperatures)));
+		attributes.put(new Feature("std_temperature", galileo.util.Math.computeStdDev(temperatures)));
+		
+		attributes.put(new Feature("min_humidity", Collections.min(humidities)));
+		attributes.put(new Feature("max_humidity", Collections.max(humidities)));
+		attributes.put(new Feature("avg_humidity", galileo.util.Math.computeAvg(humidities)));
+		attributes.put(new Feature("std_humidity", galileo.util.Math.computeStdDev(humidities)));
+		
+		
+		attributes.put(new Feature("min_CO2", Collections.min(CO2)));
+		attributes.put(new Feature("max_CO2", Collections.max(CO2)));
+		attributes.put(new Feature("avg_CO2", galileo.util.Math.computeAvg(CO2)));
+		attributes.put(new Feature("std_CO2", galileo.util.Math.computeStdDev(CO2)));
+		
+		attributes.put(new Feature("min_r1", Collections.min(rand1)));
+		attributes.put(new Feature("max_r1", Collections.max(rand1)));
+		attributes.put(new Feature("avg_r1", galileo.util.Math.computeAvg(rand1)));
+		attributes.put(new Feature("std_r1", galileo.util.Math.computeStdDev(rand1)));
+		
+		attributes.put(new Feature("min_r2", Collections.min(rand2)));
+		attributes.put(new Feature("max_r2", Collections.max(rand2)));
+		attributes.put(new Feature("avg_r2", galileo.util.Math.computeAvg(rand2)));
+		attributes.put(new Feature("std_r2", galileo.util.Math.computeStdDev(rand2)));
+		
+		attributes.put(new Feature("min_r3", Collections.min(rand3)));
+		attributes.put(new Feature("max_r3", Collections.max(rand3)));
+		attributes.put(new Feature("avg_r3", galileo.util.Math.computeAvg(rand3)));
+		attributes.put(new Feature("std_r3", galileo.util.Math.computeStdDev(rand3)));
+		
+		attributes.put(new Feature("min_r4", Collections.min(rand4)));
+		attributes.put(new Feature("max_r4", Collections.max(rand4)));
+		attributes.put(new Feature("avg_r4", galileo.util.Math.computeAvg(rand4)));
+		attributes.put(new Feature("std_r4", galileo.util.Math.computeStdDev(rand4)));
+		
+		attributes.put(new Feature("count", lines.length));
+
+		return attributes;
+		
+	}
+
 	
 	private class TimeStampedBuffer{
 		private StringBuilder buffer;

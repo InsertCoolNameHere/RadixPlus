@@ -35,8 +35,12 @@ import java.awt.Graphics2D;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -50,6 +54,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -132,6 +137,8 @@ public class HashGrid{
 	public Pair<Integer, String> getPlotInfo(int plotID){
 		return this.plotIDToRepAndGenotype.get(plotID);
 	}
+	
+	
 	public void initGrid(String filepath) throws HashGridException, IOException, BitmapException{
 		//Initialize the grid based on given file (logic in BitmapTester)
 		String plots = new String(Files.readAllBytes(Paths.get(filepath)));
@@ -144,10 +151,39 @@ public class HashGrid{
 			JSONArray coords = ((JSONArray)((JSONObject)((JSONObject)o).get("geometry")).get("coordinates"));
 			JSONArray firstCoord = (JSONArray)((JSONArray)coords.get(0)).get(0);
 			poly.moveTo(firstCoord.getDouble(0), firstCoord.getDouble(1));
-			int plotID = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("ID_Plot");
-			String genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
-			int rep = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("Rep");
+			
+			JSONObject properties = (JSONObject)(((JSONObject)o).get("properties"));
+			int plotID = 0;
+			
+			if(properties.has("plotID")) {
+				plotID = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("plotID");
+			} else {
+				plotID = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("ID_Plot");
+			}
+			
+			
+			String genotype = "";
+			
+			if(properties.has("Genotype")) {
+				genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
+			} else {
+				genotype = "GENO"+ThreadLocalRandom.current().nextInt(100);
+			}
+			//String genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
+			
+			
+			int rep = 0;
+			
+			
+			if(properties.has("Rep")) {
+				rep = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("Rep");
+			} else {
+				rep = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("rep");
+			}
+			
+			
 			plotIDToRepAndGenotype.put(plotID, new Pair<>(rep, genotype));
+			
 			if (genotype.toString().equals("Water")) {
 				continue;
 			}
@@ -183,7 +219,7 @@ public class HashGrid{
 		}
 		/*Once all points are added, */
 		applyUpdates();
-		logger.info("HashGrid fully initialized");
+		logger.info("RIKI: HashGrid fully initialized. TOTAL PLOTS: "+plotIDToRepAndGenotype.size());
 	}
 	
 	public static double[][] listToArr(List<Coordinates> coords){
@@ -398,6 +434,7 @@ public class HashGrid{
 
 	public boolean addPoint(Coordinates coords) {
 		String geohash = GeoHash.encode(coords, this.precision);
+		logger.info("RIKI: CURRENT POINT: "+coords+" "+geohash);
 		try {
 			return addPoint(geohash);
 		} catch (BitmapException e) {
@@ -569,5 +606,205 @@ public class HashGrid{
 	public int getHeight() {
 		return height;
 	}
+	
+	
+	
+	// POPULATING THE COLORADO SHAPE FILES
+	public static void main(String arg[]) {
+		
+		/*
+		 * Map<Integer, String> plotToGenotypeMap = new HashMap<Integer, String>();
+		 * 
+		 * String filePath =
+		 * "/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/grid/genotype.csv";
+		 * 
+		 * readGenotypeCsv(filePath, plotToGenotypeMap);
+		 */
+		
+		//checkJsonFile();
+		
+		/*String baseHash = "9xjr6b";
+		String a1 = "9xjr6bbpbpb";
+		String a2 = "9xjr6bpbpbp";
+		
+		HashGrid hashGrid = new HashGrid(baseHash, 11, a1, a2);
+		try {
+			hashGrid.locatePoint(new Coordinates(40.6531105521f,-104.995681f));
+		} catch (BitmapException e) {
+			e.printStackTrace();
+		}*/
+		
+		
+		String filePath = "/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/genotype.csv";
+		Map<Integer, String> plotToGenotypeMap = new HashMap<Integer, String>();
+		readGenotypeCsv(filePath, plotToGenotypeMap);
+		
+	}
+	
+	
+	
+	
+	
+	public static void readGenotypeCsv(String filePath, Map<Integer, String> plotToGenotypeMap) {
+		
+		BufferedReader reader;
+		
+		try {
+			reader = new BufferedReader(new FileReader(filePath));
+			String line = reader.readLine();
+			
+			line = reader.readLine();
+			while (line != null) {
+				String[] tokens = line.split(",");
+				
+				String genoType = tokens[0];
+				int plotId = Integer.valueOf(tokens[2]);
+				
+				plotToGenotypeMap.put(plotId, genoType);
+				// read next line
+				line = reader.readLine();
+			}
+			reader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+		StringBuffer sb = new StringBuffer("");
+		String plotsString = "";
+		
+		plotToGenotypeMap = new HashMap<Integer, String>();
+		
+		filePath = "/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/plots_new.json";
+		try {
+			reader = new BufferedReader(new FileReader(filePath));
+			String line = reader.readLine();
+			
+			while (line != null) {
+				sb.append(line);
+				line = reader.readLine();
+			}
+			reader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		plotsString = sb.toString();
+		//appendToJson(plotsString, plotToGenotypeMap);
+		
+		getBoundsOfShapeFile(plotsString);
+		
+	}
+	
+	public static void getBoundsOfShapeFile(String fullJson) {
+		
+		double highLat = 0d;
+		double lowLat = 90d;
+		
+		double highLon = -180d;
+		double lowLon = 0d;
+		
+		
+		JSONObject fsJSON = new JSONObject(fullJson);
+		
+		JSONArray geometries = (JSONArray)fsJSON.get("features");
+		
+		for (Object o : geometries){
+			
+			JSONArray coords = ((JSONArray) ((JSONObject) ((JSONObject) o).get("geometry")).get("coordinates"));
+			
+			for (int i = 1; i < ((JSONArray) coords.get(0)).length(); i++) {
+				double lat = ((JSONArray) ((JSONArray) coords.get(0)).get(i)).getDouble(1);
+				double lon = ((JSONArray) ((JSONArray) coords.get(0)).get(i)).getDouble(0);
+				
 
+				if(lat < lowLat)
+					lowLat = lat;
+				if(lat > highLat)
+					highLat = lat;
+				
+				if(lon < lowLon)
+					lowLon = lon;
+				if(lon > highLon)
+					highLon = lon;
+				
+				
+			}
+			
+			
+		}
+		
+		System.out.println("LATITUDES: "+lowLat+" "+highLat);
+		System.out.println("LONGITUDES: "+lowLon+" "+highLon);
+		
+		
+		
+	}
+	
+	
+	public static void appendToJson(String fullJson, Map<Integer, String> plotToGenotypeMap) {
+		
+		JSONObject fsJSON = new JSONObject(fullJson);
+		
+		JSONArray geometries = (JSONArray)fsJSON.get("features");
+		
+		for (Object o : geometries){
+			
+		
+			JSONObject properties = (JSONObject)(((JSONObject)o).get("properties"));
+			int plotID = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("plotID");
+			
+			String genotype = plotToGenotypeMap.get(plotID);
+			
+			
+			if(plotToGenotypeMap.get(plotID)!=null) {
+				properties.put("Genotype", genotype);
+			} else {
+				properties.put("Genotype", "GENO"+ThreadLocalRandom.current().nextInt(100));
+			}
+			//String genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
+			
+		}
+		
+		System.out.println(fsJSON.toString());
+		
+		
+		try (PrintWriter out = new PrintWriter("/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/plots_updated.json")) {
+		    out.println(fsJSON.toString());
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+	}
+	
+	
+	
+	public static void checkJsonFile() {
+		
+		StringBuffer sb = new StringBuffer("");
+		String plotsString = "";
+		BufferedReader reader;
+		String filePath = "/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/plots_sample.json";
+		try {
+			reader = new BufferedReader(new FileReader(filePath));
+			String line = reader.readLine();
+			
+			while (line != null) {
+				sb.append(line);
+				line = reader.readLine();
+			}
+			reader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		plotsString = sb.toString();
+		
+		JSONObject fsJSON = new JSONObject(plotsString);
+		
+		System.out.println(fsJSON.toString());
+	}
+	
+	
+	
+	
+	
 }

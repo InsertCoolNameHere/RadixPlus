@@ -37,13 +37,25 @@ import galileo.dht.NodeInfo;
 import galileo.dht.PartitionException;
 import galileo.dht.Partitioner;
 import galileo.dht.SpatialHierarchyPartitioner;
+import galileo.dht.StorageNode;
 import galileo.dht.hash.HashException;
 public class Sampler {
 	private Partitioner<Metadata> partitioner;
 	private Random rand = new Random();
 	static Logger logger = Logger.getLogger("galileo");
+	
+	private int latIndex = 11;
+	private int lonIndex = 12;
+	
 	public Sampler(SpatialHierarchyPartitioner partitioner){
 		this.partitioner = partitioner;
+		rand.setSeed(System.currentTimeMillis());
+	}
+	
+	public Sampler(SpatialHierarchyPartitioner partitioner, int latIndex, int lonIndex){
+		this.partitioner = partitioner;
+		this.latIndex = latIndex;
+		this.lonIndex = lonIndex;
 		rand.setSeed(System.currentTimeMillis());
 	}
 	
@@ -57,11 +69,14 @@ public class Sampler {
 		String [] lines = toSample.split("\\r?\\n");
 		HashMap<NodeInfo, Integer> dests = new HashMap<>();
 		/*There surely must be a better way to initialize a query grid?*/
-		HashGrid queryGrid = new HashGrid("wdw0x9", grid.getPrecision(), "wdw0x9bpbpb", "wdw0x9pbpbp");
+		//HashGrid queryGrid = new HashGrid("wdw0x9", grid.getPrecision(), "wdw0x9bpbpb", "wdw0x9pbpbp");
+		
+		HashGrid queryGrid = new HashGrid(StorageNode.baseHash, grid.getPrecision(), StorageNode.a1, StorageNode.a2);
 		for (String line : lines){
 			
-			double lat = Double.parseDouble(line.split(",")[1]);
-			double lon = Double.parseDouble(line.split(",")[2]); //hard code index #1 and #2 to be lat and long. WILL CHANGE
+			double lat = Double.parseDouble(line.split(",")[latIndex]);
+			double lon = Double.parseDouble(line.split(",")[lonIndex]); //hard code index #1 and #2 to be lat and long. WILL CHANGE
+			logger.info("RIKI:PT:"+lat+","+lon);
 			queryGrid.addPoint(new Coordinates(lat, lon));
 		}
 		/*Ensure that all points were added*/
@@ -104,8 +119,8 @@ public class Sampler {
 		HashMap<NodeInfo, Integer> dests = new HashMap<>();
 		for (String line : lines){
 			
-			float lat = Float.parseFloat(line.split(",")[1]);
-			float lon = Float.parseFloat(line.split(",")[2]); //hard code index #1 and #2 to be lat and long. WILL CHANGE
+			float lat = Float.parseFloat(line.split(",")[latIndex]);
+			float lon = Float.parseFloat(line.split(",")[lonIndex]); //hard code index #1 and #2 to be lat and long. WILL CHANGE
 			Metadata meta = new Metadata();
 			meta.setSpatialProperties(new SpatialProperties(lat,lon));
 			NodeInfo x = this.partitioner.locateData(meta);

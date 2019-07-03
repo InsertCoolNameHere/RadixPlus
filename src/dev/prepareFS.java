@@ -1,12 +1,14 @@
 package dev;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import galileo.comm.FilesystemAction;
 import galileo.comm.FilesystemRequest;
 import galileo.comm.TemporalType;
 import galileo.dataset.SpatialHint;
+import galileo.dataset.feature.Feature;
 import galileo.dataset.feature.FeatureType;
 import galileo.net.NetworkDestination;
 import galileo.util.Pair;
@@ -15,7 +17,8 @@ import galileo.comm.Connector;
 /**
  * THIS CLASS IS FOR DEVELOPMENT ONLY, AND SHOULD BE REMOVED IN THE FINAL DISTRIBUTION*/
 public class prepareFS {
-	public static void main(String [] args) throws IOException, InterruptedException{
+	
+	public static void main1(String [] args) throws IOException, InterruptedException{
 		Connector connector = new Connector();
 		List<Pair<String, FeatureType>> featureList = new ArrayList<>();
 		//features must be in order which they appear in raw data
@@ -34,8 +37,49 @@ public class prepareFS {
 		featureList.add(new Pair<>("Random7", FeatureType.STRING));
 		SpatialHint spatialHint = new SpatialHint("lat", "long");
 
-		FilesystemRequest fsRequest = new FilesystemRequest(
-		"roots", FilesystemAction.CREATE, featureList, spatialHint);
+		FilesystemRequest fsRequest = new FilesystemRequest("roots", FilesystemAction.CREATE, featureList, spatialHint);
+		fsRequest.setNodesPerGroup(5);
+		fsRequest.setPrecision(11);
+		fsRequest.setTemporalType(TemporalType.HOUR_OF_DAY);
+
+		//Any Galileo storage node hostname and port number
+		NetworkDestination storageNode = new NetworkDestination("lattice-100.cs.colostate.edu", 5635);
+		connector.publishEvent(storageNode, fsRequest);
+		Thread.sleep(2500);
+		connector.close();
+	}
+	
+	public static void main(String [] args) throws IOException, InterruptedException{
+		Connector connector = new Connector();
+		
+		List<Pair<String, FeatureType>> featureList = new ArrayList<>();
+		//features must be in order which they appear in raw data
+		featureList.add(new Pair<>("time", FeatureType.LONG));
+		
+		featureList.add(new Pair<>("field_x", FeatureType.INT));
+		featureList.add(new Pair<>("field_y", FeatureType.INT));
+		
+		featureList.add(new Pair<>("band0_ref", FeatureType.DOUBLE));
+		featureList.add(new Pair<>("band1_ref", FeatureType.DOUBLE));
+		featureList.add(new Pair<>("band2_ref", FeatureType.DOUBLE));
+		featureList.add(new Pair<>("band3_ref", FeatureType.DOUBLE));
+		featureList.add(new Pair<>("band4_ref", FeatureType.DOUBLE));
+		featureList.add(new Pair<>("band5_ref", FeatureType.DOUBLE));
+		
+		featureList.add(new Pair<>("easting", FeatureType.DOUBLE));
+		featureList.add(new Pair<>("northing", FeatureType.DOUBLE));
+		
+		featureList.add(new Pair<>("lat", FeatureType.DOUBLE));
+		featureList.add(new Pair<>("lon", FeatureType.DOUBLE));
+		
+		featureList.add(new Pair<>("ndvi", FeatureType.DOUBLE));
+		featureList.add(new Pair<>("o_savi", FeatureType.DOUBLE));
+		
+		
+		
+		SpatialHint spatialHint = new SpatialHint("lat", "long");
+
+		FilesystemRequest fsRequest = new FilesystemRequest("roots", FilesystemAction.CREATE, featureList, spatialHint);
 		fsRequest.setNodesPerGroup(5);
 		fsRequest.setPrecision(11);
 		fsRequest.setTemporalType(TemporalType.HOUR_OF_DAY);

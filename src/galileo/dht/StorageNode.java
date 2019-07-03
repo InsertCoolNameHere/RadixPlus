@@ -74,7 +74,8 @@ import galileo.comm.FilesystemRequest;
 import galileo.comm.TemporalFilesystemEvent;
 import galileo.comm.TemporalFilesystemRequest;
 import galileo.comm.GalileoEventMap;
-import galileo.comm.IRODSReadyCheck;
+import galileo.comm.IRODSReadyCheckRequest;
+import galileo.comm.IRODSReadyCheckResponse;
 import galileo.comm.IRODSRequest;
 import galileo.comm.IRODSRequest.TYPE;
 import galileo.comm.MetadataEvent;
@@ -138,6 +139,10 @@ public class StorageNode implements RequestListener{
 	private String rootDir;
 	private String resultsDir;
 	private int numCores;
+	
+	public static String baseHash = "9xjr6b";
+	public static String a1 = "9xjr6bbpbpb";
+	public static String a2 = "9xjr6bpbpbp";
 
 	private File pidFile;
 	private File fsFile;
@@ -190,6 +195,8 @@ public class StorageNode implements RequestListener{
 		// THIS PART HANDLES LOADING OF THE SHAPEFILE
 		/*Configure the global HashGrid based on a required file. This file
 		 * must be located in the config/grid directory. Only one such file may exist.*/
+		
+		// /radix/galileo/config/grid/
 		String pathToGridFile = SystemConfig.getConfDir()+File.separator+"grid";
 		File [] gridFiles = new File(pathToGridFile).listFiles();
 		if (gridFiles.length != 1)
@@ -197,11 +204,16 @@ public class StorageNode implements RequestListener{
 					+ "shape file exists in " + pathToGridFile);
 		/**@TODO Modify HashGrid constructor to receive the file and have it detect the baseHash*/
 		try {
-			globalGrid = new HashGrid("wdw0x9", 11, "wdw0x9bpbpb", "wdw0x9pbpbp");
+			// BASEHASH, UPPER-LEFT, BOTTOM-RIGHT
+			//globalGrid = new HashGrid("wdw0x9", 11, "wdw0x9bpbpb", "wdw0x9pbpbp");
+			globalGrid = new HashGrid(baseHash, 11, a1, a2);
 			//pathToGridFile + name of grid file
+			
+			// THIS READS THE PLOTS.JSON FILE AND MARKS THE PLOTS ON THE HASHGRID
 			globalGrid.initGrid(pathToGridFile+File.separator+gridFiles[0].getName());
 			logger.info("HashGrid initialized");
-		}catch (IOException | HashGridException | BitmapException e) {
+			
+		} catch (IOException | HashGridException | BitmapException e) {
 			logger.log(Level.SEVERE, "could not open grid initialization file. Error: " + e);
 		}
 	}
@@ -346,10 +358,14 @@ public class StorageNode implements RequestListener{
 			GeospatialFileSystem fs = (GeospatialFileSystem)fsMap.get(event.getName());
 			if (fs == null) {
 				try {
+					logger.info("RIKI: REACHED HERE1");
 					fs = new GeospatialFileSystem(this, this.rootDir, event.getName(), event.getPrecision(),
 							event.getNodesPerGroup(), event.getTemporalValue(), this.network, event.getFeatures(),
 							event.getSpatialHint(), false);
 					fsMap.put(event.getName(), fs);
+					logger.info("RIKI: REACHED HERE5");
+					logger.info("RIKI: FSMAP: "+fsMap);
+					logger.info("RIKI: REACHED HERE6");
 				} catch (FileSystemException | SerializationException | IOException | PartitionException | HashException
 						| HashTopologyException e) {
 					logger.log(Level.SEVERE, "Could not initialize the Galileo File System!", e);
@@ -477,10 +493,10 @@ public class StorageNode implements RequestListener{
 	}
 	
 	@EventHandler
-	public void handleIRODSReadyCheck(IRODSReadyCheck check, EventContext context) throws IOException {
-		IRODSReadyCheck response = new IRODSReadyCheck(IRODSReadyCheck.Type.REPLY);
+	public void handleIRODSReadyCheck(IRODSReadyCheckRequest check, EventContext context) throws IOException {
+		IRODSReadyCheckResponse response = new IRODSReadyCheckResponse(IRODSReadyCheckResponse.Type.REPLY);
 		long timeSinceLastMessage = System.currentTimeMillis() - this.dataStoreHandler.getLastProcessedTime();
-		if (timeSinceLastMessage >= 600*1000) //600000 ms = 10 minutes
+		if (timeSinceLastMessage >= DataStoreHandler.irodsCheckTimeSecs*1000) //600000 ms = 10 minutes
 			response.setReady(true);
 		context.sendReply(response);
 	}
@@ -665,6 +681,12 @@ public class StorageNode implements RequestListener{
 				reqHandler.handleRequest(new MetadataEvent(request.getRequest()), new MetadataResponse(response));
 				this.requestHandlers.add(reqHandler);
 			} else if ("galileo#plot".equalsIgnoreCase(request.getRequest().getString("kind"))) {
+				/*-------------------------------------------------------------*/
+				// THIS HANDLES METADATA REQUEST
+				logger.info("RIKI: RECEIVED A METADATA REQUEST..." + request.getRequest().getString("type")
+						+ "XXX" + request.getRequest().getString("features") 
+						+ "XXX" + request.getRequest().getString("plotID"));
+				
 				JSONObject response = new JSONObject();
 				response.put("kind", "galileo#plot");
 				response.put("result",  new JSONArray());
@@ -697,6 +719,8 @@ public class StorageNode implements RequestListener{
 	@EventHandler
 	public void handleMetadata(MetadataEvent event, EventContext context) throws IOException {
 		if ("galileo#plot".equalsIgnoreCase(event.getRequest().getString("kind")) && "summary".equalsIgnoreCase(event.getRequest().getString("type"))) {
+			
+			logger.info("RIKI: TYPE1");
 			JSONObject response = new JSONObject();
 			response.put("kind", "galileo#plot");
 			response.put("type", "summary");
@@ -718,6 +742,8 @@ public class StorageNode implements RequestListener{
 
 			
 		} else if ("galileo#plot".equalsIgnoreCase(event.getRequest().getString("kind")) && "series".equalsIgnoreCase(event.getRequest().getString("type"))) {
+			
+			logger.info("RIKI: TYPE2");
 			JSONObject response = new JSONObject();
 			response.put("kind", "galileo#plot");
 			response.put("type", "series");
@@ -753,6 +779,8 @@ public class StorageNode implements RequestListener{
 			context.sendReply(new MetadataResponse(response));
 		}
 		else if ("galileo#filesystem".equalsIgnoreCase(event.getRequest().getString("kind"))) {
+			
+			logger.info("RIKI: TYPE3");
 			JSONObject response = new JSONObject();
 			response.put("kind", "galileo#filesystem");
 			JSONArray result = new JSONArray();
@@ -764,6 +792,8 @@ public class StorageNode implements RequestListener{
 			response.put("result", result);
 			context.sendReply(new MetadataResponse(response));
 		} else if ("galileo#overview".equalsIgnoreCase(event.getRequest().getString("kind"))) {
+			
+			logger.info("RIKI: TYPE4");
 			JSONObject request = event.getRequest();
 			JSONObject response = new JSONObject();
 			response.put("kind", "galileo#overview");
@@ -789,6 +819,9 @@ public class StorageNode implements RequestListener{
 			logger.info(response.toString());
 			context.sendReply(new MetadataResponse(response));
 		} else if ("galileo#features".equalsIgnoreCase(event.getRequest().getString("kind"))) {
+			
+			// RIKI: THE FIRST REQUEST THAT GETS FIRED DURING LOADING OF THE FRONT-END
+			logger.info("RIKI: TYPE5");
 			JSONObject request = event.getRequest();
 			JSONObject response = new JSONObject();
 			response.put("kind", "galileo#features");

@@ -35,7 +35,10 @@ public class GalileoEventMap extends EventMap {
         addMapping(102, NonBlockStorageRequest.class);
         addMapping(103, NonBlockStorageEvent.class);
         addMapping(104, IRODSRequest.class);
-        addMapping(105, IRODSReadyCheck.class);
+        
+        
+        addMapping(105, IRODSReadyCheckRequest.class);
+        addMapping(106, IRODSReadyCheckResponse.class);
         
         addMapping(200, QueryEvent.class);
         addMapping(201, QueryRequest.class);

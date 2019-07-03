@@ -141,8 +141,8 @@ public class GeospatialFileSystem extends FileSystem {
 	private Set<String> geohashIndex;
 	
 	private int temporalIndex = 0;
-	private int latIndex = 2;
-	private int lonIndex = 1;
+	private int latIndex = 11;
+	private int lonIndex = 12;
 	private boolean timeIsEpoch = true;
 
 	private static final String TEMPORAL_YEAR_FEATURE = "x__year__x";
@@ -156,6 +156,8 @@ public class GeospatialFileSystem extends FileSystem {
 			throws FileSystemException, IOException, SerializationException, PartitionException, HashException,
 			HashTopologyException {
 		super(storageDirectory, name, ignoreIfPresent, "geospatial");
+		
+		//logger.info("RIKI: REACHED HERE2");
 		this.master = sn;
 		this.nodesPerGroup = nodesPerGroup;
 		this.geohashIndex = new HashSet<>();
@@ -196,6 +198,7 @@ public class GeospatialFileSystem extends FileSystem {
 			}
 		}
 
+		//logger.info("RIKI: REACHED HERE3");
 		/*
 		 * TODO: Ask end user about the partitioning scheme. chronospatial or
 		 * spatiotemporal. Accordingly, use TemporalHierarchyPartitioner or
@@ -203,17 +206,37 @@ public class GeospatialFileSystem extends FileSystem {
 		 **/
 //		this.partitioner = new OriginalTemporalHierarchyPartitioner(sn, this.network, this.temporalType.getType());
 		// Geohashes for US region and also Philippines (only for testing)
-		String[] geohashes = {// "8g", "8u", "8v", "8x", "8y", "8z", "94", "95", "96", "97", "9d", "9e", "9g", "9h", "9j",
+		//String[] geohashes = {// "8g", "8u", "8v", "8x", "8y", "8z", "94", "95", "96", "97", "9d", "9e", "9g", "9h", "9j",
 //				"9k", "9m", "9n", "9p", "9q", "9r", "9s", "9t", "9u", "9v", "9w", "9x", "9y", "9z", "b8", "b9", "bb",
 //				"bc", "bf", "c0", "c1", "c2", "c3", "c4", "c6", "c8", "c9", "cb", "cc", "cd", "cf", "d4", "d5", "d6",
 //				"d7", "dd", "de", "dh", "dj", "dk", "dm", "dn", "dp", "dq", "dr", "ds", "dt", "dw", "dx", "dz", "f0",
 //				"f1", "f2", "f3", "f4", "f6", "f8", "f9", "fb", "fc", "fd", "ff",
 				
-				"wdw0x995","wdw0x994","wdw0x9c3","wdw0x98g","wdw0x9c2","wdw0x98f","wdw0x9c1","wdw0x98e","wdw0x9c0",
-				"wdw0x98d","wdw0x98c","wdw0x98b","wdw0x9c4","wdw0x98x","wdw0x9bb","wdw0x98w","wdw0x98v","wdw0x98u",
-				"wdw0x98t","wdw0x98s","wdw0x9bf","wdw0x98z","wdw0x989","wdw0x98y","wdw0x9bc","wdw0x99h","wdw0x991",
-				"wdw0x990","wdw0x99p","wdw0x9b8","wdw0x99n","wdw0x99j"};
+				//"wdw0x995","wdw0x994","wdw0x9c3","wdw0x98g","wdw0x9c2","wdw0x98f","wdw0x9c1","wdw0x98e","wdw0x9c0",
+				//"wdw0x98d","wdw0x98c","wdw0x98b","wdw0x9c4","wdw0x98x","wdw0x9bb","wdw0x98w","wdw0x98v","wdw0x98u",
+				//"wdw0x98t","wdw0x98s","wdw0x9bf","wdw0x98z","wdw0x989","wdw0x98y","wdw0x9bc","wdw0x99h","wdw0x991",
+				//"wdw0x990","wdw0x99p","wdw0x9b8","wdw0x99n","wdw0x99j"};
 		
+		String[] geohashes = {"9xjr6b86","9xjr6b87","9xjr6b88","9xjr6b89","9xjr6b07","9xjr6b82","9xjr6b83","9xjr6b96","9xjr6b97","9xjr6b98","9xjr6b99",
+				"9xjr6b15","9xjr6b17","9xjr6b8b","9xjr6b8c","9xjr6b8d","9xjr6b90","9xjr6b91","9xjr6b92","9xjr6b93","9xjr6b94","9xjr6b95","9xjr6b2q",
+				"9xjr6b2r","9xjr6b2s","9xjr6b2t","9xjr6b2u","9xjr6b2v","9xjr6b2w","9xjr6b2x","9xjr6b2y","9xjr6b2z","9xjr6b2b","9xjr6b2c","9xjr6b2d",
+				"9xjr6b2e","9xjr6b2f","9xjr6b2g","9xjr6b2k","9xjr6b2m","9xjr6b3p","9xjr6b3q","9xjr6b3r","9xjr6b3s","9xjr6b3t","9xjr6b3u","9xjr6b3v",
+				"9xjr6b3w","9xjr6b3x","9xjr6b3y","9xjr6b3z","9xjr6b3b","9xjr6b3c","9xjr6b3d","9xjr6b3e","9xjr6b3f","9xjr6b3g","9xjr6b3h","9xjr6b3j",
+				"9xjr6b3k","9xjr6b3m","9xjr6b3n","9xjr6b0m","9xjr6b8u","9xjr6b8v","9xjr6b8w","9xjr6b22","9xjr6b23","9xjr6b0q","9xjr6b8y","9xjr6b0r",
+				"9xjr6b0s","9xjr6b26","9xjr6b0t","9xjr6b27","9xjr6b0u","9xjr6b28","9xjr6b0v","9xjr6b29","9xjr6b0w","9xjr6b0x","9xjr6b9b","9xjr6b0y",
+				"9xjr6b9c","9xjr6b0z","9xjr6b9d","9xjr6b9e","9xjr6b8e","9xjr6b8f","9xjr6b8g","9xjr6b8k","9xjr6b8m","9xjr6b0e","9xjr6b0g","9xjr6b8q",
+				"9xjr6b8s","9xjr6b0k","9xjr6b8t","9xjr6b30","9xjr6b1n","9xjr6b9v","9xjr6b31","9xjr6b9w","9xjr6b32","9xjr6b1p","9xjr6b33","9xjr6b1q",
+				"9xjr6b9y","9xjr6b34","9xjr6b1r","9xjr6b35","9xjr6b1s","9xjr6b36","9xjr6b1t","9xjr6b37","9xjr6b1u","9xjr6b38","9xjr6b1v","9xjr6b39",
+				"9xjr6b1w","9xjr6b1x","9xjr6b1y","9xjr6b1z","9xjr6b9f","9xjr6b9g","9xjr6b9h","9xjr6b9j","9xjr6b9k","9xjr6b9m","9xjr6b1e","9xjr6b9n",
+				"9xjr6b1g","9xjr6b1h","9xjr6b9q","9xjr6b1j","9xjr6b9s","9xjr6b1k","9xjr6b9t","9xjr6b1m","9xjr6b9u"};
+		
+		
+		// HANDLING FOR COLORADO PLOTS
+		
+		//String[] baseGeohashes = {StorageNode.baseHash};
+		
+		//geohashes = generateGeohashes(geohashes, geohashes[0].length()+1);
+		//logger.info("RIKI: REACHED HERE4");
 		this.partitioner = new SpatialHierarchyPartitioner(sn, this.network, geohashes);
 		this.timeFormat = System.getProperty("galileo.fs.GeospatialFileSystem.timeFormat", DEFAULT_TIME_FORMAT);
 //		int maxPrecision = GeoHash.MAX_PRECISION / 5;
@@ -227,6 +250,38 @@ public class GeospatialFileSystem extends FileSystem {
 		this.pathJournal = new PathJournal(this.storageDirectory + File.separator + pathStore);
 		setType("geospatial");
 		createMetadataGraph();
+	}
+	
+	
+	private static String[] generateGeohashes(String[] baseGeohashes, int desiredPrecision) {
+		List<String> allGeoHashes = new ArrayList<String>(Arrays.asList(baseGeohashes));
+		
+		for(int i = 1; i < desiredPrecision; i++) {
+			
+			List<String> currentGeohashes = new ArrayList<String>();
+			
+			for(String geoHash : allGeoHashes) {
+				
+				
+				SpatialRange range1 = GeoHash.decodeHash(geoHash);
+				
+				Coordinates c1 = new Coordinates(range1.getLowerBoundForLatitude(), range1.getLowerBoundForLongitude());
+				Coordinates c2 = new Coordinates(range1.getUpperBoundForLatitude(), range1.getLowerBoundForLongitude());
+				Coordinates c3 = new Coordinates(range1.getUpperBoundForLatitude(), range1.getUpperBoundForLongitude());
+				Coordinates c4 = new Coordinates(range1.getLowerBoundForLatitude(), range1.getUpperBoundForLongitude());
+				
+				ArrayList<Coordinates> cs1 = new ArrayList<Coordinates>();
+				cs1.add(c1);cs1.add(c2);cs1.add(c3);cs1.add(c4);
+				
+				currentGeohashes.addAll(Arrays.asList(GeoHash.getIntersectingGeohashesForConvexBoundingPolygon(cs1, i+1)));
+				
+			}
+			allGeoHashes = currentGeohashes;
+			
+		}
+		Collections.sort(allGeoHashes);
+		String[] returnArray = allGeoHashes.toArray(new String[allGeoHashes.size()]);
+		return returnArray;
 	}
 
 	public JSONArray getFeaturesRepresentation() {

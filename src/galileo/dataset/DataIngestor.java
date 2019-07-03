@@ -66,6 +66,7 @@ import galileo.dht.PartitionException;
 import galileo.dht.SpatialHierarchyPartitioner;
 import galileo.dht.StorageNode;
 import galileo.dht.hash.HashException;
+import galileo.fs.FileSystem;
 import galileo.fs.GeospatialFileSystem;
 import galileo.net.ClientMessageRouter;
 import galileo.util.CustomBufferedReader;
@@ -224,7 +225,7 @@ public class DataIngestor extends Thread{
 	 * which are then split into smaller messages to be "stamped" and forwarded to the appropriate node in the Radix cluster.
 	 * @param key the selection key to read*/
 	private void read(SelectionKey key) throws IOException, HashException, PartitionException {
-		logger.info("Beginnning to read ingest file. Time: " + new Date(System.currentTimeMillis()));
+		logger.info("RIKI: Beginnning to read ingest file. Time: " + new Date(System.currentTimeMillis()));
 		
 		// INITIATE CHUNK PROCESSORS
 		// THESE WILL PICK OFF CHUNKS FROM THE QUEUE
@@ -280,6 +281,10 @@ public class DataIngestor extends Thread{
 							lineCount = 0;
 						}
 					}
+					
+					if(chunk.length() > 0) {
+						queue.add(chunk.toString());
+					}
 					logger.info("Processed 250 MB of file and added " + numMsgs + " messages to be stamped");
 					numMsgs= 0;
 					in.close();
@@ -302,7 +307,11 @@ public class DataIngestor extends Thread{
 			cp.kill();
 	}
 	
-	
+	/**
+	 * THIS TAKES OUT CHUNKS FROM THE QUEUE AND ACTUALLY BEGINS THE PROCESSING
+	 * @author sapmitra
+	 *
+	 */
 	 static class ChunkProcessor extends Thread {
 	        private final DataIngestor master;
 	        private final StorageNode sn;
@@ -323,9 +332,12 @@ public class DataIngestor extends Thread{
 	        public void kill() {
 	        	alive = false;
 	        }
+	        
 	        public void run() {
 	        	alive = true;
-	        	Sampler sampler = new Sampler(((SpatialHierarchyPartitioner)((GeospatialFileSystem)this.sn.getFS("roots")).getPartitioner()));
+	        	GeospatialFileSystem fs = (GeospatialFileSystem)this.sn.getFS("roots");
+	        	Sampler sampler = new Sampler(((SpatialHierarchyPartitioner)((GeospatialFileSystem)this.sn.getFS("roots")).getPartitioner()),
+	        			fs.getLatIndex(), fs.getLonIndex());
 	        	while(alive) {
 					try {
 						String data = master.queue.take();
@@ -338,6 +350,7 @@ public class DataIngestor extends Thread{
 						// HOW MANY RECORDS FALL IN WHICH DESTINATION
 						HashMap<NodeInfo, Integer> dests = response.getNodeMap();
 						
+						logger.info("RIKI: THE FOLLOWING NODES MIGHT HANDLE CHUNKS: "+dests.keySet());
 						if (dests.keySet().size() == 1) {//all data belongs to one node
 							Map.Entry<NodeInfo,Integer> entry = dests.entrySet().iterator().next();
 							NodeInfo dest = entry.getKey();
@@ -348,6 +361,8 @@ public class DataIngestor extends Thread{
 								sendMessage(compressed, dest, response.checkAll());
 							else
 								logger.severe("Identified null as destination");
+							
+							logger.info("RIKI: THE FOLLOWING NODE(S) IS SELECTED TO HANDLE CHUNKS: "+dests.keySet());
 						}
 						else {
 							
@@ -364,6 +379,8 @@ public class DataIngestor extends Thread{
 								this.sn.handleLocalNonBlockStorageRequest(new NonBlockStorageRequest(compressed, "roots"));
 							else if (finalDest!=null)
 								sendMessage(compressed, finalDest, response.checkAll());
+							
+							logger.info("RIKI: THE FOLLOWING NODE(S) IS SELECTED TO HANDLE CHUNKS: "+dests.keySet());
 						}
 						master.sumStampTimes += (System.currentTimeMillis()-start);
 						master.numStamps ++;
