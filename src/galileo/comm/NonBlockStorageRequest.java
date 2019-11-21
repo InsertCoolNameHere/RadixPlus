@@ -35,10 +35,22 @@ public class NonBlockStorageRequest implements Event{
 	private byte [] data;
 	private String fsName;
 	private boolean checkAll = true;
+	
+	// THE TYPE OF DATA THIS IS...FOR ARIZONA DATA
+	private String sensorType = "vanilla";
+	
     public NonBlockStorageRequest(byte [] data, String fsName) {
         this.data = data;
         this.fsName = fsName;
     }
+    
+    public NonBlockStorageRequest(byte [] data, String fsName, String sensorType) {
+        this.data = data;
+        this.fsName = fsName;
+        this.sensorType = sensorType;
+    }
+    
+    
 
     public String getFS() {
     	return this.fsName;
@@ -57,6 +69,7 @@ public class NonBlockStorageRequest implements Event{
     public NonBlockStorageRequest(SerializationInputStream in)
     throws IOException, SerializationException {
         this.fsName = in.readString();
+        this.sensorType = in.readString();
         int dataSize = in.readInt();
         byte [] inData = new byte[dataSize];
         in.readFully(inData);
@@ -68,8 +81,17 @@ public class NonBlockStorageRequest implements Event{
     public void serialize(SerializationOutputStream out)
     throws IOException {
     	out.writeString(fsName);
+    	out.writeString(sensorType);
     	out.writeInt(data.length);
         out.write(data);
         out.writeBoolean(checkAll);
     }
+
+	public String getSensorType() {
+		return sensorType;
+	}
+
+	public void setSensorType(String sensorType) {
+		this.sensorType = sensorType;
+	}
 }

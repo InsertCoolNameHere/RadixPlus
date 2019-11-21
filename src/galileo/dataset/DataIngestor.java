@@ -73,7 +73,14 @@ import galileo.util.CustomBufferedReader;
 import web.Sampler;
 import web.SamplerResponse;
 
+
+// to begin ingesting data from a particular location. The command to issue is : echo "<filePathToIngest>$$<fsName>$$sensorType" | nc <host-name> 42070
 public class DataIngestor extends Thread{
+	
+	public static String fsName = "roots-arizona1";
+	// THE TYPE OF FILE WE ARE DEALING WITH...COMES INTO FACTOR FOR ARIZONA
+	public static String fileSensorType = "vanilla";
+	
 	public String [] hosts;
 	public int index = 0;
 	public BlockingQueue<String> queue = new PriorityBlockingQueue<>();
@@ -86,6 +93,7 @@ public class DataIngestor extends Thread{
 	private ServerSocketChannel serverChannel;
 	private Selector selector;
 	public volatile long sumStampTimes = 0, numStamps = 0;
+	
 	private static Logger logger = Logger.getLogger("galileo");
 	public DataIngestor(StorageNode sn) throws IOException{
 		this.sn = sn;
@@ -220,6 +228,25 @@ public class DataIngestor extends Thread{
 		}
 		return filePath;
 	}
+	
+	
+	private String getSensorType(String fileName) {
+		
+		String ret = "vanilla";
+		
+		if(fileName.contains("irt")) {
+			return "irt";
+		} else if(fileName.contains("sonar")) {
+			return "sonar";
+		} else if(fileName.contains("ndvi")) {
+			return "ndvi";
+		} else if(fileName.contains("lidar")) {
+			return "lidar";
+		} 
+		
+		return ret;
+		
+	}
 	/**
 	 * This method determines the filepath sent from an external node to read data from. Data is read in 250 MB chunks from disk,
 	 * which are then split into smaller messages to be "stamped" and forwarded to the appropriate node in the Radix cluster.
@@ -227,12 +254,24 @@ public class DataIngestor extends Thread{
 	private void read(SelectionKey key) throws IOException, HashException, PartitionException {
 		logger.info("RIKI: Beginnning to read ingest file. Time: " + new Date(System.currentTimeMillis()));
 		
+		String filePath = readKey(key);
+		
+		String[] tokens = filePath.split(",");
+		
+		filePath = tokens[0];
+		
+		if(tokens.length == 3) {
+			fsName = tokens[1];
+			fileSensorType = tokens[2];
+		}
+		
+		logger.info("RIKI: TOKENS:"+tokens.length+" "+fsName+" "+fileSensorType);
+		
 		// INITIATE CHUNK PROCESSORS
 		// THESE WILL PICK OFF CHUNKS FROM THE QUEUE
 		for (ChunkProcessor cp : threadPool)
 			cp.start();
 		
-		String filePath = readKey(key);
 		boolean fileRead = false;
 		String lineSep = System.lineSeparator();
 		File f = new File(filePath);
@@ -280,6 +319,7 @@ public class DataIngestor extends Thread{
 							chunk = new StringBuilder();
 							lineCount = 0;
 						}
+						
 					}
 					
 					if(chunk.length() > 0) {
@@ -322,8 +362,8 @@ public class DataIngestor extends Thread{
 	            this.sn = sn;
 	            this.messageRouter = new ClientMessageRouter();
 	        }
-	        private void sendMessage(byte[] message, NodeInfo dest, boolean checkAll) throws IOException {
-	        	NonBlockStorageRequest request = new NonBlockStorageRequest(message, "roots");
+	        private void sendMessage(byte[] message, NodeInfo dest, boolean checkAll, String fsName1, String fileSensorType1) throws IOException {
+	        	NonBlockStorageRequest request = new NonBlockStorageRequest(message, fsName1, fileSensorType1);
 	        	request.setCheckAll(checkAll);
 	        	messageRouter.sendMessage(dest, EventPublisher.wrapEvent(request));
 	   		 
@@ -335,9 +375,12 @@ public class DataIngestor extends Thread{
 	        
 	        public void run() {
 	        	alive = true;
-	        	GeospatialFileSystem fs = (GeospatialFileSystem)this.sn.getFS("roots");
-	        	Sampler sampler = new Sampler(((SpatialHierarchyPartitioner)((GeospatialFileSystem)this.sn.getFS("roots")).getPartitioner()),
-	        			fs.getLatIndex(), fs.getLonIndex());
+	        	GeospatialFileSystem fs = (GeospatialFileSystem)this.sn.getFS(fsName);
+	        	
+	        	//logger.info("RIKI: PARAMS: "+ fs.getDataLatIndex(fileSensorType)+ " "+ fs+" "+fileSensorType);
+	        	Sampler sampler = new Sampler(((SpatialHierarchyPartitioner)((GeospatialFileSystem)this.sn.getFS(fsName)).getPartitioner()),
+	        			fs.getDataLatIndex(fileSensorType), fs.getDataLonIndex(fileSensorType));
+	        	//logger.info("RIKI: GRID INIT SUCCESS...");
 	        	while(alive) {
 					try {
 						String data = master.queue.take();
@@ -345,7 +388,7 @@ public class DataIngestor extends Thread{
 						
 						// DATA IS COMPRESSED BEFORE BEING SENT OUT
 						byte[] compressed = Snappy.compress(data);
-						SamplerResponse response = sampler.sample(this.sn.getGlobalGrid(), data);
+						SamplerResponse response = sampler.sample(this.sn.getGlobalGrid(fsName), data);
 						
 						// HOW MANY RECORDS FALL IN WHICH DESTINATION
 						HashMap<NodeInfo, Integer> dests = response.getNodeMap();
@@ -356,9 +399,9 @@ public class DataIngestor extends Thread{
 							NodeInfo dest = entry.getKey();
 							//no good
 							if (dest != null && dest.toString().split(":")[0].contentEquals(this.sn.getHostName()))//data belongs to this node, no need for network xfer
-								this.sn.handleLocalNonBlockStorageRequest(new NonBlockStorageRequest(compressed, "roots"));
+								this.sn.handleLocalNonBlockStorageRequest(new NonBlockStorageRequest(compressed, fsName, fileSensorType));
 							else if (dest != null)
-								sendMessage(compressed, dest, response.checkAll());
+								sendMessage(compressed, dest, response.checkAll(), fsName, fileSensorType);
 							else
 								logger.severe("Identified null as destination");
 							
@@ -376,9 +419,9 @@ public class DataIngestor extends Thread{
 								}
 							}//no good
 							if (finalDest != null && finalDest.toString().split(":")[0].contentEquals(this.sn.getHostName()))//data belongs to this node, no need for network xfer
-								this.sn.handleLocalNonBlockStorageRequest(new NonBlockStorageRequest(compressed, "roots"));
+								this.sn.handleLocalNonBlockStorageRequest(new NonBlockStorageRequest(compressed, fsName, fileSensorType));
 							else if (finalDest!=null)
-								sendMessage(compressed, finalDest, response.checkAll());
+								sendMessage(compressed, finalDest, response.checkAll(), fsName, fileSensorType);
 							
 							logger.info("RIKI: THE FOLLOWING NODE(S) IS SELECTED TO HANDLE CHUNKS: "+dests.keySet());
 						}

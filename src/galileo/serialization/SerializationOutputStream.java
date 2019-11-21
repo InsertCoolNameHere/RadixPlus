@@ -117,6 +117,14 @@ public class SerializationOutputStream extends DataOutputStream {
         }
     }
     
+    public void writeIntCollection(Collection<Integer> collection)
+    	    throws IOException {
+    	        writeInt(collection.size());
+    	        for (int str : collection) {
+    	            writeInt(str);
+    	        }
+    	    }
+    
     public void writeStringMap(Map<String, String> map) throws IOException{
     	writeInt(map.size());
     	for(String key : map.keySet()) {

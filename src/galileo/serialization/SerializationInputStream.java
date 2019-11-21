@@ -85,6 +85,8 @@ public class SerializationInputStream extends DataInputStream {
             collection.add(obj);
         }
     }
+    
+    
 
     public void readStringCollection(Collection<String> collection)
     throws IOException {

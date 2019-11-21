@@ -52,6 +52,8 @@ public class QueryEvent implements Event {
 	private List<Coordinates> polygon;
 	private String time;
 	private boolean dryRun;
+	
+	private String sensorName = "";
 
 	private void validateId(String id) {
 		if (id == null || id.trim().length() == 0 || !id.matches("[A-Za-z0-9]+"))
@@ -215,6 +217,7 @@ public class QueryEvent implements Event {
 		if (hasMetadataQuery)
 			this.metadataQuery = new Query(in);
 		dryRun = in.readBoolean();
+		sensorName = in.readString();
 	}
 
 	@Override
@@ -234,5 +237,14 @@ public class QueryEvent implements Event {
 		if (hasMetadataQuery())
 			out.writeSerializable(this.metadataQuery);
 		out.writeBoolean(dryRun);
+		out.writeString(sensorName);
+	}
+
+	public String getSensorName() {
+		return sensorName;
+	}
+
+	public void setSensorName(String sensorName) {
+		this.sensorName = sensorName;
 	}
 }

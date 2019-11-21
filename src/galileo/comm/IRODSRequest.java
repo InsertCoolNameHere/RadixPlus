@@ -30,8 +30,12 @@ software, even if advised of the possibility of such damage.
 package galileo.comm;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import galileo.event.Event;
+import galileo.graph.SummaryStatistics;
+import galileo.serialization.SerializationException;
 import galileo.serialization.SerializationInputStream;
 import galileo.serialization.SerializationOutputStream;
 
@@ -44,6 +48,12 @@ public class IRODSRequest implements Event{
 	private int plotNum;
 	private String replyData;
 	private String filePath;
+	
+	private String fs="";
+	private String metadata="";
+	
+	private SummaryStatistics summary = null;
+	
 	
 	public IRODSRequest(TYPE type, int plotNum) {
 		this.type = type;
@@ -84,15 +94,38 @@ public class IRODSRequest implements Event{
 		out.writeBoolean(filePath != null);
 		if (filePath != null)
 			out.writeString(filePath);
+		
+		if(summary !=null) {
+			out.writeBoolean(true);
+			
+			List<SummaryStatistics> summaries = new ArrayList<>();
+			summaries.add(summary);
+			out.writeSerializableCollection(summaries);
+		} else {
+			out.writeBoolean(false);
+		}
+		
+		out.writeString(fs);
+		out.writeString(metadata);
 	}
 
-	public IRODSRequest(SerializationInputStream in) throws IOException{
+	public IRODSRequest(SerializationInputStream in) throws IOException, SerializationException{
 		this.type = fromInt(in.readInt());
 		this.plotNum = in.readInt();
 		if (in.readBoolean())
 			this.replyData = in.readString();
 		if (in.readBoolean())
 			this.filePath = in.readString();
+		
+		boolean hasSummary = in.readBoolean();
+		if(hasSummary) {
+			List<SummaryStatistics> summaries = new ArrayList<>();
+			in.readSerializableCollection(SummaryStatistics.class, summaries);
+			summary = summaries.get(0);
+		}
+		
+		this.fs = in.readString();
+		this.metadata = in.readString();
 	}
 	
 	public static int fromType(TYPE type) {
@@ -135,5 +168,45 @@ public class IRODSRequest implements Event{
 			str += ", Filepath: " + filePath;
 		return str;
 		
+	}
+
+	public String getFs() {
+		return fs;
+	}
+
+	public void setFs(String fs) {
+		this.fs = fs;
+	}
+
+	public String getMetadata() {
+		return metadata;
+	}
+
+	public void setMetadata(String metadata) {
+		this.metadata = metadata;
+	}
+
+	public String getReplyData() {
+		return replyData;
+	}
+
+	public void setReplyData(String replyData) {
+		this.replyData = replyData;
+	}
+
+	public SummaryStatistics getSummary() {
+		return summary;
+	}
+
+	public void setSummary(SummaryStatistics summary) {
+		this.summary = summary;
+	}
+
+	public void setType(TYPE type) {
+		this.type = type;
+	}
+
+	public void setPlotNum(int plotNum) {
+		this.plotNum = plotNum;
 	}
 }

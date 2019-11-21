@@ -31,6 +31,7 @@ import java.util.List;
 import galileo.dataset.SpatialHint;
 import galileo.dataset.feature.FeatureType;
 import galileo.event.Event;
+import galileo.fs.FilesystemConfig;
 import galileo.serialization.SerializationException;
 import galileo.serialization.SerializationInputStream;
 import galileo.serialization.SerializationOutputStream;
@@ -86,6 +87,8 @@ public class FilesystemRequest implements Event {
 	 * feature list and their type should be of type FeatureType.FLOAT
 	 */
 	private SpatialHint spatialHint;
+	
+	private FilesystemConfig configs;
 
 	/**
 	 * @param name:
@@ -233,6 +236,8 @@ public class FilesystemRequest implements Event {
 			this.featureList = getFeatureList(in.readString());
 		if (in.readBoolean())
 			this.spatialHint = new SpatialHint(in);
+		
+		this.configs = new FilesystemConfig(in);
 	}
 
 	@Override
@@ -248,7 +253,17 @@ public class FilesystemRequest implements Event {
 		out.writeBoolean(hasSpatialHint());
 		if (hasSpatialHint())
 			this.spatialHint.serialize(out);
+		
+		out.writeSerializable(configs);
 
+	}
+
+	public FilesystemConfig getConfigs() {
+		return configs;
+	}
+
+	public void setConfigs(FilesystemConfig configs) {
+		this.configs = configs;
 	}
 
 }

@@ -162,6 +162,12 @@ public class GeoHashUtils {
 
         return new double[] { latInterval[0], latInterval[1], lonInterval[0], lonInterval[1] };
     }
+    
+    public static void main(String arg[]) {
+    	
+    	double[] decode_bbox = decode_bbox("9xb4");
+    	System.out.println("HAPPY");
+    }
 
     /**
      * This decodes the geo hash into it's center. Note that the coordinate that you used to generate the geo hash may
@@ -458,6 +464,7 @@ public class GeoHashUtils {
      * @return a set of geo hashes that cover the polygon area.
      */
     public static Set<String> geoHashesForPolygon(int maxLength, double[]... polygonPoints) {
+    	// POLYPOINTS: RECTABGLE WITHIN WHICH WE ARE LOOKING FOR INNER OR INTERSECTING GEOHASHES
         for (double[] ds : polygonPoints) {
             // basically the algorithm can go into an endless loop. Best to avoid the poles.
             if(ds[1] < -89.5 || ds[1] > 89.5) {
@@ -469,21 +476,26 @@ public class GeoHashUtils {
             throw new IllegalArgumentException("maxLength should be between 2 and " + DEFAULT_PRECISION + " was " + maxLength);
         }
 
+        // RETURNS BOUNDS OF THE POLYGON IN THE FORM OF A RECTANGLE AS minLat, maxLat, minLon, maxLon
         double[] bbox = GeoGeometry.boundingBox(polygonPoints);
-        // first lets figure out an appropriate geohash length
-//        double diagonal = GeoGeometry.distance(bbox[0], bbox[2], bbox[1], bbox[3]);
-//        int hashLength = suitableHashLength(diagonal, bbox[0], bbox[2]);
+        
         int hashLength = maxLength;
+        
         Set<String> partiallyContained = new HashSet<String>();
         // now lets generate all geohashes for the containing bounding box
-        // lets start at the top left:
-
+        
+        // START WITH THE BOTTOM-LEFT GEOHASH
         String rowHash = encode(bbox[0], bbox[2], hashLength);
+        
+        // RETURNS minLat, maxLat, minLon, maxLon FOR GIVEN GEOHASH
         double[] rowBox = decode_bbox(rowHash);
+        
+        // WHILE THE MIN LAT OF THE GEOHASH IS BELOW THE HIGHEST LAT OF THE BOUNDING POLYGON
         while (rowBox[0] < bbox[1]) {
             String columnHash = rowHash;
             double[] columnBox = rowBox;
 
+            // WE MOVE EASTWARDS AND EVERY GEOHASH WE FIND IN THE PROCESS IS INCLUDED IN PARTIALLY_CONTAINED
             while (isWest(columnBox[2], bbox[3])) {
                 partiallyContained.add(columnHash);
                 columnHash = east(columnHash);
@@ -498,6 +510,8 @@ public class GeoHashUtils {
         Set<String> fullyContained = new TreeSet<String>();
 
         int detail = hashLength;
+        
+        // SINCE HASHLENGTH=MAXLENGTH, THE FOLLOWING CODE DOES NOT GET CALLED
         // we're not aiming for perfect detail here in terms of 'pixellation', 6
         // extra chars in the geohash ought to be enough and going beyond 9
         // doesn't serve much purpose.
@@ -570,6 +584,7 @@ public class GeoHashUtils {
         // now we need to break up the partially contained hashes
         for (String hash : partiallyContained) {
         	checkCompleteArea.clear();
+        	// SUB_HASH: A CHARACTER DEEPER
             for (String h : subHashes(hash)) {
                 double[] hashBbox = decode_bbox(h);
                 double[] point3 = new double[] { hashBbox[2], hashBbox[0] };

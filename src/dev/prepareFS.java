@@ -43,7 +43,7 @@ public class prepareFS {
 		fsRequest.setTemporalType(TemporalType.HOUR_OF_DAY);
 
 		//Any Galileo storage node hostname and port number
-		NetworkDestination storageNode = new NetworkDestination("lattice-100.cs.colostate.edu", 5635);
+		NetworkDestination storageNode = new NetworkDestination("lattice-1.cs.colostate.edu", 5635);
 		connector.publishEvent(storageNode, fsRequest);
 		Thread.sleep(2500);
 		connector.close();
@@ -85,7 +85,7 @@ public class prepareFS {
 		fsRequest.setTemporalType(TemporalType.HOUR_OF_DAY);
 
 		//Any Galileo storage node hostname and port number
-		NetworkDestination storageNode = new NetworkDestination("lattice-100.cs.colostate.edu", 5635);
+		NetworkDestination storageNode = new NetworkDestination("lattice-1.cs.colostate.edu", 5635);
 		connector.publishEvent(storageNode, fsRequest);
 		Thread.sleep(2500);
 		connector.close();

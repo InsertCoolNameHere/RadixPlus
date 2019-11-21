@@ -132,17 +132,25 @@ public class ClientRequestHandler implements MessageListener {
 			try {
 				event = this.eventWrapper.unwrap(gresponse);
 				if (event instanceof QueryResponse && this.response instanceof QueryResponse) {
+					
 					QueryResponse actualResponse = (QueryResponse) this.response;
+					
 					actualResponse.setElapsedTime(elapsedTime);
 					QueryResponse eventResponse = (QueryResponse) event;
+					//logger.info("RIKI: COMBINING QUERY RESPONSES: "+ eventResponse.getJSONResults());
+					
 					JSONObject responseJSON = actualResponse.getJSONResults();
 					JSONObject eventJSON = eventResponse.getJSONResults();
+					
 					if (responseJSON.length() == 0) {
 						for (String name : JSONObject.getNames(eventJSON))
 							responseJSON.put(name, eventJSON.get(name));
 					} else {
 						if (responseJSON.has("queryId") && eventJSON.has("queryId")
 								&& responseJSON.getString("queryId").equalsIgnoreCase(eventJSON.getString("queryId"))) {
+							
+							
+							// ==========================DRY====================================
 							if (actualResponse.isDryRun()) {
 								JSONObject actualResults = responseJSON.getJSONObject("result");
 								
@@ -160,7 +168,8 @@ public class ClientRequestHandler implements MessageListener {
 										}
 									}
 								}
-							} else {
+							} // ==========================DRY====================================
+							else {
 								JSONArray actualResults = responseJSON.getJSONArray("result");
 								JSONArray eventResults = eventJSON.getJSONArray("result");
 	
@@ -284,6 +293,7 @@ public class ClientRequestHandler implements MessageListener {
 						}
 					}
 					else if ("galileo#features".equalsIgnoreCase(emrJSON.getString("kind"))) {
+						//logger.info("RIKI: ASSEMBLING...");
 						for (int i = 0; i < emrResults.length(); i++) {
 							JSONObject fsJSON = emrResults.getJSONObject(i);
 							for (String fsName : fsJSON.keySet()) {
@@ -406,15 +416,18 @@ public class ClientRequestHandler implements MessageListener {
 								+ e.getMessage(), e);
 			}
 		}
-		if (this.response instanceof QueryResponse) {
+		/*if (this.response instanceof QueryResponse) {
+			
 			QueryResponse actualResponse = (QueryResponse) this.response;
 			JSONArray json = actualResponse.getJSONResults().getJSONArray("result");
 			Set<String> noDupes = new HashSet<>();
+			
 			for(int i = 0; i < json.length(); i++) {
 				JSONArray paths = ((JSONObject)json.get(i)).getJSONArray("filePath");
 				for (int j = 0; j < paths.length(); j++) 
 					noDupes.add((String)paths.get(j));
 			}
+			
 			JSONArray newArray = new JSONArray();
 			for (String s : noDupes) {
 				newArray.put(s);
@@ -422,7 +435,7 @@ public class ClientRequestHandler implements MessageListener {
 			JSONObject result = new JSONObject();
 			result.put("result", newArray);
 			this.response = new QueryResponse(((QueryResponse) this.response).getId(), ((QueryResponse) this.response).getHeader(), result);
-		}
+		}*/
 		this.requestListener.onRequestCompleted(this.response, clientContext, this);
 	}
 

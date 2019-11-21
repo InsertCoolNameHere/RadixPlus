@@ -55,6 +55,9 @@ public class QueryRequest implements Event {
 	private List<Coordinates> polygon;
 	private String time;
 	private boolean dryRun;
+	
+	private String sensorName;
+	
 	private void validate(String fsName) {
 		if (fsName == null || fsName.trim().length() == 0 || !fsName.matches("[a-z0-9-]{5,50}"))
 			throw new IllegalArgumentException("invalid filesystem name");
@@ -187,7 +190,8 @@ public class QueryRequest implements Event {
 	@Deserialize
 	public QueryRequest(SerializationInputStream in) throws IOException, SerializationException {
 		fsName = in.readString();
-		logger.info("Read fsName: " + fsName);
+		sensorName = in.readString();
+		System.out.println("Read fsName: " + fsName+" "+sensorName);
 		boolean isTemporal = in.readBoolean();
 		if (isTemporal)
 			time = in.readString();
@@ -197,7 +201,7 @@ public class QueryRequest implements Event {
 			in.readSerializableCollection(Coordinates.class, poly);
 			polygon = poly;
 		}
-		logger.info("Read polygon: " + polygon);
+		//logger.info("Read polygon: " + polygon);
 		boolean hasFeatureQuery = in.readBoolean();
 		if (hasFeatureQuery)
 			this.featureQuery = new Query(in);
@@ -205,11 +209,13 @@ public class QueryRequest implements Event {
 		if (hasMetadataQuery)
 			this.metadataQuery = new Query(in);
 		dryRun = in.readBoolean();
+		
 	}
 
 	@Override
 	public void serialize(SerializationOutputStream out) throws IOException {
 		out.writeString(fsName);
+		out.writeString(sensorName);
 		out.writeBoolean(isTemporal());
 		logger.info("isTemporal? " + isTemporal());
 		if (isTemporal())
@@ -227,5 +233,14 @@ public class QueryRequest implements Event {
 		if (hasMetadataQuery())
 			out.writeSerializable(this.metadataQuery);
 		out.writeBoolean(dryRun);
+		
+	}
+
+	public String getSensorName() {
+		return sensorName;
+	}
+
+	public void setSensorName(String sensorName) {
+		this.sensorName = sensorName;
 	}
 }

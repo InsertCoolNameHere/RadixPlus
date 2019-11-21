@@ -107,6 +107,7 @@ import galileo.fs.FileSystem;
 import galileo.fs.FileSystemException;
 import galileo.fs.GeospatialFileSystem;
 import galileo.graph.Path;
+import galileo.graph.SummaryStatistics;
 import galileo.net.ClientConnectionPool;
 import galileo.net.MessageListener;
 import galileo.net.NetworkDestination;
@@ -140,9 +141,10 @@ public class StorageNode implements RequestListener{
 	private String resultsDir;
 	private int numCores;
 	
-	public static String baseHash = "9xjr6b";
-	public static String a1 = "9xjr6bbpbpb";
-	public static String a2 = "9xjr6bpbpbp";
+	// THE FOLLOWING 3 ARE NOT USED, BUT a1, a2 are used as placeholders
+	public static String baseHash = "9tbkh4";
+	public static String a1 = "9tbkh4bpbpb";
+	public static String a2 = "9tbkh4pbpbp";
 
 	private File pidFile;
 	private File fsFile;
@@ -153,13 +155,14 @@ public class StorageNode implements RequestListener{
 	private ClientConnectionPool connectionPool;
 //	private Map<String, GeospatialFileSystem> fsMap;
 	private Map<String, FileSystem> fsMap;
-	private HashGrid globalGrid;
+	//private HashGrid globalGrid;
 	private GalileoEventMap eventMap = new GalileoEventMap();
 	private ConcurrentEventReactor eventReactor = new ConcurrentEventReactor(this, eventMap,4);
 	private List<ClientRequestHandler> requestHandlers;
 	private DataStoreHandler dataStoreHandler;
 	private ConcurrentHashMap<String, QueryTracker> queryTrackers = new ConcurrentHashMap<>();
 	private Listener listener;
+	
 	
 	public StorageNode() throws IOException, HashGridException {
 		try {
@@ -197,12 +200,17 @@ public class StorageNode implements RequestListener{
 		 * must be located in the config/grid directory. Only one such file may exist.*/
 		
 		// /radix/galileo/config/grid/
+		/*
+		logger.severe("RIKI: CONF DIR NOT USED: "+SystemConfig.getConfDir()+File.separator+"grid");
 		String pathToGridFile = SystemConfig.getConfDir()+File.separator+"grid";
 		File [] gridFiles = new File(pathToGridFile).listFiles();
 		if (gridFiles.length != 1)
 			throw new HashGridException("Could not locate required grid initialization file. Ensure that only one "
 					+ "shape file exists in " + pathToGridFile);
+					*/
 		/**@TODO Modify HashGrid constructor to receive the file and have it detect the baseHash*/
+		
+		/*
 		try {
 			// BASEHASH, UPPER-LEFT, BOTTOM-RIGHT
 			//globalGrid = new HashGrid("wdw0x9", 11, "wdw0x9bpbpb", "wdw0x9pbpbp");
@@ -215,7 +223,7 @@ public class StorageNode implements RequestListener{
 			
 		} catch (IOException | HashGridException | BitmapException e) {
 			logger.log(Level.SEVERE, "could not open grid initialization file. Error: " + e);
-		}
+		}*/
 	}
 
 	/**
@@ -245,6 +253,9 @@ public class StorageNode implements RequestListener{
 		boolean nodeFound = false;
 		for (NodeInfo node : network.getAllNodes()) {
 			String nodeName = node.getHostname();
+			
+			logger.info("RIKI: HOST AND CANONICAL: "+ this.hostname+" "+this.canonicalHostname);
+			//logger.info("RIKI: NODENAME: "+nodeName);
 			if (nodeName.equals(this.hostname) || nodeName.equals(this.canonicalHostname)) {
 				nodeFound = true;
 				break;
@@ -263,7 +274,7 @@ public class StorageNode implements RequestListener{
 		this.fsMap = new HashMap<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(fsFile))) {
 			String jsonSource = br.readLine();
-			logger.info("jsonSource: " + jsonSource);
+			//logger.info("jsonSource: " + jsonSource);
 			if (jsonSource != null && jsonSource.length() > 0) {
 				JSONObject fsJSON = new JSONObject(jsonSource);
 				if (JSONObject.getNames(fsJSON) != null)
@@ -315,6 +326,10 @@ public class StorageNode implements RequestListener{
 //		logger.info("getFS called, there are " + fsMap.size() + "filesystems existing");
 		return this.fsMap.get(fsName);
 	}
+	
+	public Map<String, FileSystem> getFSMap() {
+		return this.fsMap;
+	}
 	@EventHandler
 	public void handleFileSystemRequest(TemporalFilesystemRequest request, EventContext context)
 			throws HashException, IOException, PartitionException {
@@ -343,6 +358,7 @@ public class StorageNode implements RequestListener{
 		event.setPrecision(request.getPrecision());
 		event.setNodesPerGroup(request.getNodesPerGroup());
 		event.setTemporalType(request.getTemporalType());
+		event.setConfigs(request.getConfigs());
 		for (NodeInfo node : nodes) {
 			logger.info("Requesting " + node + " to perform a file system action");
 			sendEvent(node, event);
@@ -358,10 +374,11 @@ public class StorageNode implements RequestListener{
 			GeospatialFileSystem fs = (GeospatialFileSystem)fsMap.get(event.getName());
 			if (fs == null) {
 				try {
-					logger.info("RIKI: REACHED HERE1");
+					logger.info("RIKI: Begin FS Creation");
 					fs = new GeospatialFileSystem(this, this.rootDir, event.getName(), event.getPrecision(),
 							event.getNodesPerGroup(), event.getTemporalValue(), this.network, event.getFeatures(),
-							event.getSpatialHint(), false);
+							event.getSpatialHint(), false, event.getConfigs());
+					
 					fsMap.put(event.getName(), fs);
 					logger.info("RIKI: REACHED HERE5");
 					logger.info("RIKI: FSMAP: "+fsMap);
@@ -460,6 +477,10 @@ public class StorageNode implements RequestListener{
 		return this.hostname;
 	}
 	
+	public String getCanonicalHostName() {
+		return this.canonicalHostname;
+	}
+	
 	private Set<Integer> plotLocks = new HashSet<>();
 	
 	@EventHandler
@@ -474,13 +495,22 @@ public class StorageNode implements RequestListener{
 					context.sendReply(new IRODSRequest(TYPE.IGNORE, request.getPlotNum()));
 				break;
 			case DATA_REQUEST:
-				//Need to search fs for plot data and return it
+				// Need to search fs for plot data and return it
 				File toGet = new File(request.getFilePath());
+				
+				GeospatialFileSystem gfs = (GeospatialFileSystem)fsMap.get(request.getFs());
+				
 				if (toGet.exists()) {
 					String contents = new String(Files.readAllBytes(Paths.get(toGet.getAbsolutePath())));
+					
+					SummaryStatistics stats = gfs.getStatistics(toGet.getAbsolutePath());
+					// NEED TO GET METADATA OF THE THING AS WELL
+					
 					IRODSRequest reply = new IRODSRequest(TYPE.DATA_REPLY, request.getPlotNum());
 					reply.setFilePath(request.getFilePath());
 					reply.setData(contents);
+					reply.setSummary(stats);
+					
 					context.sendReply(reply);
 					toGet.delete();
 				}
@@ -507,8 +537,9 @@ public class StorageNode implements RequestListener{
 		if (fsName != null) {
 			GeospatialFileSystem gfs = (GeospatialFileSystem) fsMap.get(fsName);
 			if (gfs != null) {
+				//logger.info("RIKI: STORE MSG1: "+fsName+" "+request.getSensorType());
 				// THIS IS A SINGLE CHUNK'S DATA COMING IN FOR PROCESSING
-				StoreMessage msg = new StoreMessage(Type.UNPROCESSED, request.getData(), gfs, fsName);
+				StoreMessage msg = new StoreMessage(Type.UNPROCESSED, request.getData(), gfs, fsName, request.getSensorType());
 				msg.setCheckAll(request.checkAll());
 				dataStoreHandler.addMessage(msg);
 			}
@@ -518,11 +549,14 @@ public class StorageNode implements RequestListener{
 	// IDENTICAL TO handleNonBlockStorageRequest
 	public void handleLocalNonBlockStorageRequest(NonBlockStorageRequest request) throws IOException {
 		String fsName = request.getFS();
+		String sensorType = request.getSensorType();
 		if (fsName != null) {
 			GeospatialFileSystem gfs = (GeospatialFileSystem) fsMap.get(fsName);
 			if (gfs != null) {
-				StoreMessage msg = new StoreMessage(Type.UNPROCESSED, request.getData(), gfs, fsName);
+				logger.info("RIKI: STORE MSG: "+fsName+" "+sensorType);
+				StoreMessage msg = new StoreMessage(Type.UNPROCESSED, request.getData(), gfs, fsName, sensorType);
 				msg.setCheckAll(request.checkAll());
+				msg.setSensorType(sensorType);
 				dataStoreHandler.addMessage(msg);
 			}
 		}
@@ -573,9 +607,9 @@ public class StorageNode implements RequestListener{
 		}
 	}
 	
-	public HashGrid getGlobalGrid() {
-		return this.globalGrid;
-	}
+	/*
+	 * public HashGrid getGlobalGrid() { return this.globalGrid; }
+	 */
 	
 //	private class ParallelReader implements Runnable {
 //		private Block block;
@@ -660,6 +694,8 @@ public class StorageNode implements RequestListener{
 		try {
 			logger.info("Meta Request: " + request.getRequest().getString("kind"));
 			if ("galileo#filesystem".equalsIgnoreCase(request.getRequest().getString("kind"))) {
+				
+				logger.info("RIKI: ENTERED LOOP 1");
 				JSONObject response = new JSONObject();
 				response.put("kind", "galileo#filesystem");
 				response.put("result", new JSONArray());
@@ -667,6 +703,8 @@ public class StorageNode implements RequestListener{
 				reqHandler.handleRequest(new MetadataEvent(request.getRequest()), new MetadataResponse(response));
 				this.requestHandlers.add(reqHandler);
 			} else if ("galileo#features".equalsIgnoreCase(request.getRequest().getString("kind"))) {
+				
+				logger.info("RIKI: ENTERED LOOP 2");
 				JSONObject response = new JSONObject();
 				response.put("kind", "galileo#features");
 				response.put("result", new JSONArray());
@@ -674,6 +712,8 @@ public class StorageNode implements RequestListener{
 				reqHandler.handleRequest(new MetadataEvent(request.getRequest()), new MetadataResponse(response));
 				this.requestHandlers.add(reqHandler);
 			} else if ("galileo#overview".equalsIgnoreCase(request.getRequest().getString("kind"))) {
+				
+				logger.info("RIKI: ENTERED LOOP 3");
 				JSONObject response = new JSONObject();
 				response.put("kind", "galileo#overview");
 				response.put("result", new JSONArray());
@@ -681,11 +721,11 @@ public class StorageNode implements RequestListener{
 				reqHandler.handleRequest(new MetadataEvent(request.getRequest()), new MetadataResponse(response));
 				this.requestHandlers.add(reqHandler);
 			} else if ("galileo#plot".equalsIgnoreCase(request.getRequest().getString("kind"))) {
+				// INDIVIDUAL PLOT QUERY...BE IT SUMMARY OR SERIES IS OF THIS TYPE
+				logger.info("RIKI: ABOUT TO PERFORM A SINGLE PLOT CALCULATION...");
 				/*-------------------------------------------------------------*/
 				// THIS HANDLES METADATA REQUEST
-				logger.info("RIKI: RECEIVED A METADATA REQUEST..." + request.getRequest().getString("type")
-						+ "XXX" + request.getRequest().getString("features") 
-						+ "XXX" + request.getRequest().getString("plotID"));
+				logger.info("RIKI: RECEIVED A METADATA REQUEST..." + request.getRequest().getString("type"));
 				
 				JSONObject response = new JSONObject();
 				response.put("kind", "galileo#plot");
@@ -695,7 +735,34 @@ public class StorageNode implements RequestListener{
 				ClientRequestHandler reqHandler = new ClientRequestHandler(network.getAllDestinations(), context, this);
 				reqHandler.handleRequest(new MetadataEvent(request.getRequest()), new MetadataResponse(response));
 				this.requestHandlers.add(reqHandler);
+			
+			} else if ("galileo#upload".equalsIgnoreCase(request.getRequest().getString("kind"))) {
+				
+				// <=400 LINES OF CHUNK MUST COME IN EACH DATA AT A TIME
+				logger.info("RIKI: ENTERED LOOP FOR FILE UPLOAD");
+				/*-------------------------------------------------------------*/
+				// THIS HANDLES METADATA REQUEST
+				logger.info("RIKI: RECEIVED A STREAMING REQUEST..." + request.getRequest().getString("type")
+						+ "XXX" + request.getRequest().getInt("data"));
+				
+				JSONObject response = new JSONObject();
+				response.put("kind", "galileo#success");
+				
+				logger.info("RIKI: RETURNING RESPONSE ");
+				
+				/*
+				 * ClientRequestHandler reqHandler = new
+				 * ClientRequestHandler(network.getAllDestinations(), context, this);
+				 * reqHandler.handleRequest(new MetadataEvent(request.getRequest()), new
+				 * MetadataResponse(response)); this.requestHandlers.add(reqHandler);
+				 */
+				
+				context.sendReply(new MetadataResponse(response));
+				
+			
 			} else {
+				
+				logger.info("RIKI: ENTERED LOOP 5");
 				JSONObject response = new JSONObject();
 				response.put("kind", request.getRequest().getString("kind"));
 				response.put("error", "invalid request");
@@ -719,8 +786,10 @@ public class StorageNode implements RequestListener{
 	@EventHandler
 	public void handleMetadata(MetadataEvent event, EventContext context) throws IOException {
 		if ("galileo#plot".equalsIgnoreCase(event.getRequest().getString("kind")) && "summary".equalsIgnoreCase(event.getRequest().getString("type"))) {
+			// GETS CALLED ON PLOT CLICKED...RETURNS SUMMARY FOR THE PLOT
+			// ==================SINGLE PLOT SUMMARY================================
+			logger.info("RIKI: SUMMARY META");
 			
-			logger.info("RIKI: TYPE1");
 			JSONObject response = new JSONObject();
 			response.put("kind", "galileo#plot");
 			response.put("type", "summary");
@@ -736,14 +805,16 @@ public class StorageNode implements RequestListener{
 						result.put(s.trim());
 			}
 			response.put("result", result);
-			logger.info("Paths: " + paths);
-			logger.info("Response: " + response);
+			
+			logger.info("RIKI: Paths Found: " + paths);
+			logger.info("RIKI: Results Calculated: " + result);
 			context.sendReply(new MetadataResponse(response));
 
 			
 		} else if ("galileo#plot".equalsIgnoreCase(event.getRequest().getString("kind")) && "series".equalsIgnoreCase(event.getRequest().getString("type"))) {
-			
-			logger.info("RIKI: TYPE2");
+			// GETS CALLED FOR SELECTED PLOT GRAPH VISUALIZATION
+			// =============================SINGLE PLOT TIME SERIES==========================
+			logger.info("RIKI: SERIES META");
 			JSONObject response = new JSONObject();
 			response.put("kind", "galileo#plot");
 			response.put("type", "series");
@@ -774,8 +845,10 @@ public class StorageNode implements RequestListener{
 			}
 			response.put("result", result);
 			response.put("features", features);
-			logger.info("Paths: " + paths);
-			logger.info("Response: " + response);
+			
+			logger.info("RIKI: Paths Found: " + paths);
+			logger.info("RIKI: Results Calculated: " + result);
+			
 			context.sendReply(new MetadataResponse(response));
 		}
 		else if ("galileo#filesystem".equalsIgnoreCase(event.getRequest().getString("kind"))) {
@@ -821,20 +894,30 @@ public class StorageNode implements RequestListener{
 		} else if ("galileo#features".equalsIgnoreCase(event.getRequest().getString("kind"))) {
 			
 			// RIKI: THE FIRST REQUEST THAT GETS FIRED DURING LOADING OF THE FRONT-END
+			// getFeatures() from the js
 			logger.info("RIKI: TYPE5");
 			JSONObject request = event.getRequest();
 			JSONObject response = new JSONObject();
 			response.put("kind", "galileo#features");
 			JSONArray result = new JSONArray();
+			
 			if (request.has("filesystem") && request.get("filesystem") instanceof JSONArray) {
 				JSONArray fsNames = request.getJSONArray("filesystem");
 				for (int i = 0; i < fsNames.length(); i++) {
 					GeospatialFileSystem fs = (GeospatialFileSystem)fsMap.get(fsNames.getString(i));
 					if (fs != null) {
 						JSONArray features = fs.getFeaturesJSON();
+						
+						logger.info("RIKI: FOUND FEATURES:"+features);
 						JSONObject fsFeatures = new JSONObject();
 						fsFeatures.put(fsNames.getString(i), features);
+						
+						JSONArray attrString = fs.getConfigs().getAllAttributesJson();
+						JSONObject fsAttributes = new JSONObject();
+						fsAttributes.put(fsNames.getString(i)+"_atr", attrString);
+						
 						result.put(fsFeatures);
+						result.put(fsAttributes);
 					} else {
 						JSONObject fsFeatures = new JSONObject();
 						fsFeatures.put(fsNames.getString(i), new JSONArray());
@@ -875,13 +958,16 @@ public class StorageNode implements RequestListener{
 	 */
 	@EventHandler
 	public void handleQueryRequest(QueryRequest request, EventContext context) {
-		String featureQueryString = request.getFeatureQueryString();
-		String metadataQueryString = request.getMetadataQueryString();
+		
 		String queryId = String.valueOf(System.currentTimeMillis());
 		GeospatialFileSystem gfs = (GeospatialFileSystem) this.fsMap.get(request.getFilesystemName());
+		
+		logger.info("RIKI: RECEIVED A QUERY REQUEST");
 		if (gfs != null) {
 			QueryResponse response = new QueryResponse(queryId, gfs.getFeaturesRepresentation(), new JSONObject());
 			Metadata data = new Metadata();
+			
+			// IN ROOTS QUERIES, NO TIME IS BEING SENT SO FAR
 			if (request.isTemporal()) {
 				String[] timeSplit = request.getTime().split("-");
 				int timeIndex = Arrays.asList(TemporalType.values()).indexOf(gfs.getTemporalType());
@@ -900,6 +986,7 @@ public class StorageNode implements RequestListener{
 					data.setTemporalProperties(new TemporalProperties(c.getTimeInMillis()));
 				}
 			}
+			// THE PLOTS JUST SENDS SPATIAL PROPERTY, NOT TEMPORAL PROPERTY
 			if (request.isSpatial()) {
 				logger.log(Level.INFO, "Spatial query: {0}", request.getPolygon());
 				data.setSpatialProperties(new SpatialProperties(new SpatialRange(request.getPolygon())));
@@ -916,7 +1003,9 @@ public class StorageNode implements RequestListener{
 						: (request.isSpatial())
 								? new QueryEvent(queryId, request.getFilesystemName(), request.getPolygon())
 								: new QueryEvent(queryId, request.getFilesystemName(), request.getTime());
-
+							
+				qEvent.setSensorName(request.getSensorName());
+				
 				if (request.isDryRun()) {
 					qEvent.enableDryRun();
 					response.setDryRun(true);
@@ -1013,89 +1102,119 @@ public class StorageNode implements RequestListener{
 	 */
 	@EventHandler
 	public void handleQuery(QueryEvent event, EventContext context) {
+		
 		long hostFileSize = 0;
 		long totalProcessingTime = 0;
 		long blocksProcessed = 0;
 		int totalNumPaths = 0;
 		JSONArray header = new JSONArray();
 		JSONObject blocksJSON = new JSONObject();
+		JSONObject summaryResultsJSON = new JSONObject();
+		
 		JSONArray resultsJSON = new JSONArray();
 		long processingTime = System.currentTimeMillis();
 		try {
 			logger.info(event.getFeatureQueryString());
 			logger.info(event.getMetadataQueryString());
+			logger.info("RIKI: QUERY SENSOR:"+event.getSensorName());
+			
+			
 			String fsName = event.getFilesystemName();
 			GeospatialFileSystem fs = (GeospatialFileSystem) fsMap.get(fsName);//always roots
 			if (fs != null) {
 				header = fs.getFeaturesRepresentation();
 				Map<String, List<String>> blockMap = fs.listBlocks(event.getTime(), event.getPolygon(),
-						event.getMetadataQuery(), event.isDryRun());
+						event.getMetadataQuery(), event.isDryRun(), event.getSensorName());
+				
+				// THE FRONT-END IS NOT REQUESTING A DRY RUN
+				
+				// THIS IS THE CASE OF ONLY METADATA AND SUMMARY BEING REQUESTED AND NOT ACTUAL DATA
+				JSONArray plotSummaries = new JSONArray();
+				
+				// ==========================DRY START====================================
 				if (event.isDryRun()) {
-					/*
-					 * TODO: Make result of dryRun resemble the format of that
-					 * of non-dry-run so that the end user can retrieve the
-					 * blocks from the block paths
-					 **/
+					
 					JSONObject responseJSON = new JSONObject();
 					responseJSON.put("filesystem", event.getFilesystemName());
 					responseJSON.put("queryId", event.getQueryId());
 					for (String blockKey : blockMap.keySet()) {
-						blocksJSON.put(blockKey, new JSONArray(blockMap.get(blockKey)));
+						
+						JSONArray filePaths = new JSONArray();
+						
+						SummaryStatistics plotSummary = null;
+						
+						for(String block : blockMap.get(blockKey)) {
+							String irodsBlockPath = fs.getIrodsPath(block);
+							
+							SummaryStatistics ss = fs.getSummaryData(block);
+							
+							if(plotSummary == null)
+								plotSummary = ss;
+							else {
+								plotSummary = SummaryStatistics.mergeSummary(plotSummary, ss);
+							}
+							
+							filePaths.put(block+"$$"+irodsBlockPath);
+							
+						}
+						
+						// blockKey is just plotID in our case
+						blocksJSON.put(blockKey, filePaths);
+						summaryResultsJSON.put(blockKey, plotSummary.toJson());
 					}
 					responseJSON.put("result", blocksJSON);
+					responseJSON.put("summaries", summaryResultsJSON);
 					QueryResponse response = new QueryResponse(event.getQueryId(), header, responseJSON);
 					response.setDryRun(true);
 					context.sendReply(response);
 					return;
 				}
+				// ==========================DRY END====================================
+				
+				
 				JSONArray filePaths = new JSONArray();
+				
+				
 				int totalBlocks = 0;
+				
+				logger.info("RIKI: BLOCKPATHS: "+ blockMap);
+				
 				for (String blockKey : blockMap.keySet()) {
 					List<String> blocks = blockMap.get(blockKey);
 					totalBlocks += blocks.size();
 					for(String block : blocks){
-//						filePaths.put(block);
-						filePaths.put(new String(Files.readAllBytes(Paths.get(block))));
-						hostFileSize += new File(block).length();
+						
+						if("roots-arizona".equals(fsName)) {
+							// ARIZONA PLOT DATA IS ACTUALLY STORED IN THE BLOCKS
+							// WE JUST RETURN THE BLOCK PATH ALONG WITH THE METADATA ASSOSSIATED WITH IT
+							String tokens[] = block.split("\\$\\$");
+							String summaryString = fs.getSummaryDataString(tokens[0]);
+							
+							//logger.info("RIKI: SUMMARY STRING: "+ summaryString);
+							
+							// RETURNING BOTH THE GALILEO AND IRODS PATH
+							//filePaths.put(block+"$$"+irodsBlockPath);
+							filePaths.put(block);
+							plotSummaries.put(tokens[0]+"\n"+summaryString);
+							
+						} else {
+							// IN INITIAL ROOTS CODE, THE IRODS BLOCKPATH WAS IN THE BLOCK'S CONTENTS, WHICH IS
+							// WHY THE BLOCK IS BEING READ HERE
+							filePaths.put(new String(Files.readAllBytes(Paths.get(block))));
+						}
+						
+						if("roots-arizona".equals(fsName)) {
+							String tokens[] = block.split("\\$\\$");
+							hostFileSize += new File(tokens[0]).length();
+							
+							//logger.info("RIKI: FILESIZE: "+tokens[0]+" "+hostFileSize);
+						} else {
+							hostFileSize += new File(block).length();
+						}
 					}
 				}
-//				if (totalBlocks > 0) {
-//					if (event.getFeatureQuery() != null || event.getPolygon() != null) {
-//						hostFileSize = 0;
-//						filePaths = new JSONArray();
-//						// maximum parallelism = 64
-//						ExecutorService executor = Executors.newFixedThreadPool(Math.min(totalBlocks, 2 * numCores));
-//						List<QueryProcessor> queryProcessors = new ArrayList<>();
-//						GeoavailabilityQuery geoQuery = new GeoavailabilityQuery(event.getFeatureQuery(),
-//								event.getPolygon());
-//						for (String blockKey : blockMap.keySet()) {
-//							GeoavailabilityGrid blockGrid = new GeoavailabilityGrid(blockKey,
-//									GeoHash.MAX_PRECISION * 2 / 3);
-//							Bitmap queryBitmap = null;
-//							if (geoQuery.getPolygon() != null)
-//								queryBitmap = QueryTransform.queryToGridBitmap(geoQuery, blockGrid);
-//							List<String> blocks = blockMap.get(blockKey);
-//							for (String blockPath : blocks) {
-//								QueryProcessor qp = new QueryProcessor(fs, blockPath, geoQuery, blockGrid, queryBitmap,
-//										getResultFilePrefix(event.getQueryId(), fsName, blockKey + blocksProcessed));
-//								blocksProcessed++;
-//								queryProcessors.add(qp);
-//								executor.execute(qp);
-//							}
-//						}
-//						executor.shutdown();
-//						boolean status = executor.awaitTermination(10, TimeUnit.MINUTES);
-//						if (!status)
-//							logger.log(Level.WARNING, "Executor terminated because of the specified timeout=10minutes");
-//						for (QueryProcessor qp : queryProcessors) {
-//							if (qp.getFileSize() > 0) {
-//								hostFileSize += qp.getFileSize();
-//								for (String resultPath : qp.getResultPaths())
-//									filePaths.put(resultPath);
-//							}
-//						}
-//					} 
-//				}
+
+				
 				totalProcessingTime = System.currentTimeMillis() - processingTime;
 				totalNumPaths = filePaths.length();
 				JSONObject resultJSON = new JSONObject();
@@ -1105,6 +1224,12 @@ public class StorageNode implements RequestListener{
 				resultJSON.put("hostName", this.canonicalHostname);
 				resultJSON.put("hostPort", this.port);
 				resultJSON.put("processingTime", totalProcessingTime);
+				
+				if("roots-arizona".equals(fsName)) {
+					resultJSON.put("summaries", plotSummaries);
+				}
+				
+				
 				resultsJSON.put(resultJSON);
 			} else {
 				logger.log(Level.SEVERE, "Requested file system(" + fsName
@@ -1293,5 +1418,10 @@ public class StorageNode implements RequestListener{
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Could not start StorageNode.", e);
 		}
+	}
+
+	public HashGrid getGlobalGrid(String fsName) {
+		GeospatialFileSystem fileSystem = (GeospatialFileSystem)fsMap.get(fsName);
+		return fileSystem.getGlobalGrid();
 	}
 }

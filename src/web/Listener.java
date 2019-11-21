@@ -38,6 +38,7 @@ import java.nio.channels.spi.SelectorProvider;
 import galileo.bmp.HashGridException;
 import galileo.client.EventPublisher;
 import galileo.comm.NonBlockStorageRequest;
+import galileo.dataset.DataIngestor;
 import galileo.dht.NodeInfo;
 import galileo.dht.PartitionException;
 import galileo.dht.SpatialHierarchyPartitioner;
@@ -55,6 +56,8 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 import org.xerial.snappy.Snappy;
+
+import com.sleepycat.persist.impl.SimpleFormat.FShort;
 public class Listener extends Thread{
 	/**
 	 * Each instance of galileo.dht.StorageNode will maintain one instance of this class.
@@ -183,6 +186,8 @@ public class Listener extends Thread{
 	//This function will be responsible for reading the data received, sampling the data to determine its
 	// storage destination, and forwarding to the appropriate destination.
 	 private void read(SelectionKey key) throws IOException, HashException, PartitionException {
+		 
+		 		logger.info("RIKI: THIS WAS NOT SUPPOSED TO BE INVOKED!!!");
 		 		 long start = System.currentTimeMillis();
 		         SocketChannel channel = (SocketChannel) key.channel();
 		         ByteBuffer buffer = ByteBuffer.allocate(1024 * 100); //Read 100 KB at a time
@@ -208,10 +213,12 @@ public class Listener extends Thread{
 		             key.cancel();
 //		             return;
 //		         }
-		         Sampler sampler = new Sampler(((SpatialHierarchyPartitioner)((GeospatialFileSystem)this.master.getFS("roots")).getPartitioner()));
+		             
+		         GeospatialFileSystem gfs = (GeospatialFileSystem)this.master.getFS(DataIngestor.fsName);
+		         Sampler sampler = new Sampler(((SpatialHierarchyPartitioner)((GeospatialFileSystem)this.master.getFS(DataIngestor.fsName)).getPartitioner()));
 		         NodeInfo destination = null;
 		         try {
-		        	 SamplerResponse response = sampler.sample(this.master.getGlobalGrid(), dataString);
+		        	 SamplerResponse response = sampler.sample(this.master.getGlobalGrid(DataIngestor.fsName), dataString);
 		        	 HashMap<NodeInfo, Integer> dests = response.getNodeMap();
 						if (dests.keySet().size() == 1) {//all data belongs to one node
 							Map.Entry<NodeInfo,Integer> entry = dests.entrySet().iterator().next();

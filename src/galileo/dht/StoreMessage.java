@@ -44,12 +44,21 @@ public class StoreMessage implements Comparable <StoreMessage>{
 	private int plotID = -1;
 	private boolean checkAll = true;
 	private String filePath;
+	private String sensorType = "vanilla";
 	
 	public StoreMessage(Type type, byte[] data, GeospatialFileSystem fs, String fsName) throws IOException {
 		this.data = new String(Snappy.uncompress(data));
 		this.type = type;
 		this.fs = fs;
 		this.fsName = fsName;
+	}
+	
+	public StoreMessage(Type type, byte[] data, GeospatialFileSystem fs, String fsName, String sensorType) throws IOException {
+		this.data = new String(Snappy.uncompress(data));
+		this.type = type;
+		this.fs = fs;
+		this.fsName = fsName;
+		this.sensorType = sensorType;
 	}
 
 	public StoreMessage(Type type, String data, GeospatialFileSystem fs, String fsName, int plotID) {
@@ -98,6 +107,14 @@ public class StoreMessage implements Comparable <StoreMessage>{
 	@Override
 	public String toString() {
 		return "StoreMessage:\n{Type: " + type + ", plotID: " + plotID +"}";
+	}
+
+	public String getSensorType() {
+		return sensorType;
+	}
+
+	public void setSensorType(String sensorType) {
+		this.sensorType = sensorType;
 	}
 	
 }

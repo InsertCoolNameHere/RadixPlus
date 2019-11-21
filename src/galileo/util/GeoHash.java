@@ -29,6 +29,7 @@ import java.awt.Rectangle;
 import java.awt.geom.Area;
 import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -37,6 +38,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -74,6 +76,78 @@ public class GeoHash {
 	 */
 	public final static char[] charMap = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
 			'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
+	
+	
+	public static List<Character> evenChars = Arrays.asList('b','c','f','g','u','v','y','z','8','9','d','e','s','t','w','x','2','3','6','7','k','m','q','r','0','1','4','5','h','j','n','p');
+	public static List<Character> oddChars = Arrays.asList('p','r','x','z','n','q','w','y','j','m','t','v','h','k','s','u','5','7','e','g','4','6','d','f','1','3','9','c','0','2','8','b');
+	public static int evenWidth = 8;
+	public static int evenHeight = 4;
+	public static int oddWidth = 4;
+	public static int oddHeight = 8;
+	
+	
+	public static void main(String arg[]) {
+		
+		locateCellInGrid("9x", "9xstk");
+		
+	}
+	
+	public static void locateCellInGrid(String baseHash, String cellHash) {
+		
+		// X - ROW NUM
+		// Y - COLUMN NUM
+		int xMax = 1;
+		int yMax = 1;
+		
+		int blen = baseHash.length();
+		
+		// INTERCEPTS
+		int x = 1; 
+		int y = 1;
+		
+		String substr = cellHash.substring(baseHash.length(), cellHash.length());
+		
+		for(int i=0; i< substr.length(); i++) {
+			char c = substr.charAt(i);
+			int currentx = 0;
+			int currenty = 0;
+			
+			// BASEHASH/CURRENT HASH IS ODD
+			if(blen % 2 != 0) {
+				int indx = oddChars.indexOf(c);
+				currentx = indx/oddWidth + 1;
+				currenty = indx%oddWidth + 1;
+				
+				x = (x-1)*oddHeight + currentx;
+				y = (y-1)*oddWidth+ currenty;
+				
+				xMax = xMax*oddWidth;
+				yMax = yMax*oddHeight;
+			} else {
+				
+				int indx = evenChars.indexOf(c);
+				currentx = indx/evenWidth + 1;
+				currenty = indx%evenWidth + 1;
+				
+				x = (x-1)*evenHeight + currentx;
+				y = (y-1)*evenWidth+ currenty;
+				
+				xMax = xMax*evenWidth;
+				yMax = yMax*evenHeight;
+				
+			}
+			
+			blen++;
+		}
+		
+		System.out.println(x+" "+y);
+		
+		System.out.println(xMax+" "+yMax);
+			
+		
+	}
+	
+	
 
 	/**
 	 * Allows lookups from a GeoHash character to its integer index value.
@@ -593,24 +667,6 @@ public class GeoHash {
 	}
 	
 	
-	public static void main(String arg[]) throws ParseException, IOException {
-		
-		/*
-		Calendar cal = getCalendarFromTimestamp("1559436734", true);
-		
-		int month = cal.get(Calendar.MONTH) + 1;//add 1 because Calendar class months are 0 based (i.e Jan=0, Feb=1...) but we need human readable month
-		int year = cal.get(Calendar.YEAR);
-		int dayOfMonth = cal.get(Calendar.DAY_OF_MONTH);
-		System.out.println(year+"-"+month+"-"+dayOfMonth);
-		
-		*/
-		
-		//System.out.println(encode(40.6500868715d, -104.993802512d, 11));
-		
-		getLongestSubstring("/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/plots_new.json");
-		
-	}
-	
 	
 	public static Calendar getCalendarFromTimestamp(String timeString, boolean isEpoch) {
 		
@@ -725,6 +781,113 @@ public class GeoHash {
 		}
 		return hashes.size() > 0 ? hashes.toArray(new String[hashes.size()]) : new String[] {};
 	}
+	
+	
+	public static int[] getNecessaryIndices(String sensorType) {
+		
+		// ORDER IS LAT, LON, TIMESTAMP, ACTUAL_ATTRIBUTE
+		
+		if(sensorType.equals("vanilla")) {
+			
+			int[] indices = {11,12,0};
+			return indices;
+		} else if(sensorType.equals("irt") || sensorType.equals("ndvi")|| sensorType.equals("sonar")) {
+			
+			int[] indices = {2,3,0,5};
+			return indices;
+		} else if(sensorType.contains("lidar")) {
+			
+			int[] indices = {2,3,0,7};
+			return indices;
+			
+		} else {
+			
+			int[] indices = {11,12};
+			return indices;
+			
+		}
+		
+		
+	}
+	
+	
+	// GIVEN A SET OF GEOHASHES< GET A SET OF FINER RESOLUTION GEOHASHES INSIDE THEM
+	public static String[] generateSmallerGeohashes(String[] baseGeohashes, int desiredPrecision) {
+		List<String> allGeoHashes = new ArrayList<String>(Arrays.asList(baseGeohashes));
+		
+		for(int i = 1; i < desiredPrecision; i++) {
+			
+			List<String> currentGeohashes = new ArrayList<String>();
+			
+			for(String geoHash : allGeoHashes) {
+				
+				
+				SpatialRange range1 = GeoHash.decodeHash(geoHash);
+				
+				Coordinates c1 = new Coordinates(range1.getLowerBoundForLatitude(), range1.getLowerBoundForLongitude());
+				Coordinates c2 = new Coordinates(range1.getUpperBoundForLatitude(), range1.getLowerBoundForLongitude());
+				Coordinates c3 = new Coordinates(range1.getUpperBoundForLatitude(), range1.getUpperBoundForLongitude());
+				Coordinates c4 = new Coordinates(range1.getLowerBoundForLatitude(), range1.getUpperBoundForLongitude());
+				
+				ArrayList<Coordinates> cs1 = new ArrayList<Coordinates>();
+				cs1.add(c1);cs1.add(c2);cs1.add(c3);cs1.add(c4);
+				
+				currentGeohashes.addAll(Arrays.asList(GeoHash.getIntersectingGeohashesForConvexBoundingPolygon(cs1, i+1)));
+				
+			}
+			allGeoHashes = currentGeohashes;
+			
+		}
+		Collections.sort(allGeoHashes);
+		String[] returnArray = allGeoHashes.toArray(new String[allGeoHashes.size()]);
+		return returnArray;
+	}
+	
+	
+	public static List<String> getInternalGeohashes(String geohash, int precision) {
+		
+		List<String> allGeoHashes = new ArrayList<String>();
+		allGeoHashes.add(geohash);
+		
+		for(int i = geohash.length(); i < precision; i++) {
+			
+			List<String> currentGeohashes = new ArrayList<String>();
+			
+			for(String geoHash : allGeoHashes) {
+				
+				
+				SpatialRange range1 = GeoHash.decodeHash(geoHash);
+				
+				Coordinates c1 = new Coordinates(range1.getLowerBoundForLatitude(), range1.getLowerBoundForLongitude());
+				Coordinates c2 = new Coordinates(range1.getUpperBoundForLatitude(), range1.getLowerBoundForLongitude());
+				Coordinates c3 = new Coordinates(range1.getUpperBoundForLatitude(), range1.getUpperBoundForLongitude());
+				Coordinates c4 = new Coordinates(range1.getLowerBoundForLatitude(), range1.getUpperBoundForLongitude());
+				
+				ArrayList<Coordinates> cs1 = new ArrayList<Coordinates>();
+				cs1.add(c1);cs1.add(c2);cs1.add(c3);cs1.add(c4);
+				
+				currentGeohashes.addAll(GeoHash.getInternalGeohashes(geoHash));
+				
+			}
+			allGeoHashes = currentGeohashes;
+			
+		}
+		Collections.sort(allGeoHashes);
+		//String[] returnArray = allGeoHashes.toArray(new String[allGeoHashes.size()]);
+		return allGeoHashes;
+	}
+	
+	public static List<String> getInternalGeohashes(String geohash) {
+
+		List<String> childrenGeohashes = new ArrayList<>();
+
+		for (char c : charMap) {
+			childrenGeohashes.add(geohash + c);
+		}
+
+		return childrenGeohashes;
+	}
+
 	
 	
 }

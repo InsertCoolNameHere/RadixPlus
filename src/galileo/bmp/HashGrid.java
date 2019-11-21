@@ -89,6 +89,10 @@ public class HashGrid{
 	public HashMap<Integer, HashMap<Long, Integer>> elevenCharIntersections = new HashMap<>();
 	public HashMap<Long, HashMap<Path2D, Integer>> plotShapeToPlotID = new HashMap<>();
 	private HashMap<Integer, Pair<Integer, String>> plotIDToRepAndGenotype = new HashMap<>();
+	
+	
+	// HERE LONGITUDE IS X-AXIS AND LATITUDE IS Y-AXIS
+	
 	public HashGrid(String baseGeohash, int precision, String upperLeftHash, String bottomRightHash) {
 		this.baseRange = GeoHash.decodeHash(baseGeohash);
 		this.bmp = new Bitmap();
@@ -121,13 +125,6 @@ public class HashGrid{
 		xDegreesPerPixel = xDegrees /  this.width;
 		yDegreesPerPixel = yDegrees /  this.height;
 
-//		if (logger.isLoggable(Level.INFO)) {
-//			logger.log(Level.INFO,
-//					"Created geoavailability grid: " + "geohash={0}, precision={1}, "
-//							+ "width={2}, height={3}, baseRange={6}, " + "xDegreesPerPixel={4}, yDegreesPerPixel={5}",
-//					new Object[] { baseGeohash, precision, width, height, xDegreesPerPixel, yDegreesPerPixel,
-//							baseRange });
-//		}
 	}
 	
 	
@@ -140,12 +137,19 @@ public class HashGrid{
 	
 	
 	public void initGrid(String filepath) throws HashGridException, IOException, BitmapException{
+		
+		logger.info("READING GRIDFILE FROM "+filepath);
 		//Initialize the grid based on given file (logic in BitmapTester)
 		String plots = new String(Files.readAllBytes(Paths.get(filepath)));
 		JSONObject plotJson = new JSONObject(plots);
 		JSONArray geometries = (JSONArray)plotJson.get("features");
 		
+		int cnt = 0;
+		
 		for (Object o : geometries){
+			/*
+			 * cnt++; if(cnt%10 == 0) System.out.println(cnt);
+			 */
 			Path2D poly = new Path2D.Double();
 			//coords = all coordinates belonging to current object in iteration, length=1
 			JSONArray coords = ((JSONArray)((JSONObject)((JSONObject)o).get("geometry")).get("coordinates"));
@@ -167,7 +171,7 @@ public class HashGrid{
 			if(properties.has("Genotype")) {
 				genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
 			} else {
-				genotype = "GENO"+ThreadLocalRandom.current().nextInt(100);
+				genotype = "GENO"+ThreadLocalRandom.current().nextInt(5);
 			}
 			//String genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
 			
@@ -177,8 +181,10 @@ public class HashGrid{
 			
 			if(properties.has("Rep")) {
 				rep = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("Rep");
-			} else {
+			} else if(properties.has("rep")){
 				rep = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("rep");
+			}  else {
+				rep = ThreadLocalRandom.current().nextInt(0,5);
 			}
 			
 			
@@ -197,8 +203,12 @@ public class HashGrid{
 			}
 			poly.closePath();
 			double[][] coordArr = listToArr(polyPoints);
+			
+			// GIVEN A POLYGON, FIND 11 CHAR GEOHASHES THAT LIE INSIDE IT
+			// THE COORDINATE ARRAY COULD BE IN ANY CIRCULAR ORDER
 			Set<String> coverage = GeoHashUtils.geoHashesForPolygon(precision, coordArr);
 
+			// FOR ALL GEOHASHES CONTAINED IN THE PLOT POLYGON
 			for (String ghash : coverage) {
 
 				double [] hashBox = GeoHashUtils.decode_bbox(ghash);
@@ -210,11 +220,11 @@ public class HashGrid{
 				hashRect.lineTo(hashBox[3], hashBox[0]);
 				hashRect.lineTo(hashBox[2], hashBox[0]);
 				hashRect.closePath();
-				if ((int)plotID > 4700)//hard-coded value that will need to change...
+				if ((int)plotID > 0)//hard-coded value that will need to change...
 					this.addPoint(ghash, (int)plotID, poly);
-				if (poly.intersects(hashRect.getBounds2D())) {
+				/*if (poly.intersects(hashRect.getBounds2D())) {
 					this.addPoint(ghash, (int)plotID, poly);
-				}
+				}*/
 			}
 		}
 		/*Once all points are added, */
@@ -236,8 +246,8 @@ public class HashGrid{
 		else return -1;
 	}
 	public int locatePoint(Coordinates coords) throws BitmapException {
-		String geohash12 = GeoHash.encode(coords,  12);
-		String geohash11 = geohash12.substring(0, 11);
+		String geohash12 = GeoHash.encode(coords,  precision+1);
+		String geohash11 = geohash12.substring(0, precision);
 		int elevenCharKey = geohashToIndex(geohash11);
 
 		if (plotMapping.get(elevenCharKey) != null) {
@@ -261,11 +271,14 @@ public class HashGrid{
 			}
 			return plotMapping.get(elevenCharKey);
 		}
-		else
-			throw new BitmapException("Could not identify plot for coordinates: " + coords + "(geohash="+geohash11+")");
+		else {
+			//throw new BitmapException("Could not identify plot for coordinates: " + coords + "(geohash="+geohash11+")");
+			//logger.info("Could not identify plot for coordinates: " + coords + "(geohash="+geohash11+")");
+		}
+		return -1;
 	}
 	public Set<Integer> locatePoint(String geohash) throws BitmapException {
-		if (geohash.length() != 11)
+		if (geohash.length() != precision)
 			throw new BitmapException("Must pass 11 character geohash!");
 		Set<Integer> intersectingPlots = new HashSet<>();
 		int elevenCharKey = geohashToIndex(geohash);
@@ -352,16 +365,25 @@ public class HashGrid{
 		}
 	}
 
-	
+	// poly: polygon bounds of the current plot
 	public boolean addPoint(String geohash, int plotID, Path2D poly) throws BitmapException {
+		// GET THE SUBSTRING AFTER BASEHASH AND CONVERT IT TO LONG
 		int elevenCharKey = geohashToIndex(geohash);
+		
 		//If this geohash is not already associated with a plot, add it to the elevenCharKey->plotID map
+		// ELEVEN CHAR KEY -> PLOTID MAP
 		if (!this.plotMapping.containsKey(elevenCharKey))
 			this.plotMapping.put(elevenCharKey, plotID);
-		else {//This geohash is already associated with some other plot, add it to multipleIntersections map
-			//MultipleIntersections = 11-char index-> Map<12-char index -> plotID>
+		else {
+			// This geohash is already associated with some other plot, add it to multipleIntersections map
+			// MultipleIntersections = 11-char index-> Map<12-char index -> plotID>
+			
+			// IF THE ELEVEN CHAR HAS NEVER BEEN IN DISPUTE BEFORE,
+			// THE FINER GEOHASHMAP HAS NEVER SEEN THIS 
 			if (elevenCharIntersections.get(elevenCharKey) == null)
 				elevenCharIntersections.put(elevenCharKey, new HashMap<>());
+			
+			// GOING A LEVEL FINER
 			for (char c : GeoHash.charMap) {
 				String twelveChar = geohash+c;
 				double [] hashBox = GeoHashUtils.decode_bbox(twelveChar);
@@ -374,15 +396,22 @@ public class HashGrid{
 				twelveCharHashRect.lineTo(hashBox[2], hashBox[0]);
 				twelveCharHashRect.closePath();
 				long twelveLong = GeoHash.hashToLong(twelveChar);
+				
+				// THE PLOT POLYGON FULLY CONTAINS THE 12 CHAR
 				if (poly.contains(twelveCharHashRect.getBounds2D())) {
+					// FOR A RESOLUTION FINER, THERE ARE NO PLOTS CLAIMING THE 12 CHAR GEOHASH-ID
 					if (!elevenCharIntersections.get(elevenCharKey).containsKey(twelveLong)) 
 						elevenCharIntersections.get(elevenCharKey).put(twelveLong, plotID);
+					// SINCE THIS POLYGON FULLY CONTAINS THIS 12 CHAR, NO OTHER PLOT SHOULD CLAIM IT
 				}
+				// IF THE PLOT POLYGON ONLY INTERSECTS WITH THE 12-CHAR GEOHASH
 				else if (poly.intersects(twelveCharHashRect.getBounds2D())) {
+					// FOR A RESOLUTION FINER, THERE ARE NO PLOTS CLAIMING THE 12 CHAR GEOHASH-ID
 					if (!elevenCharIntersections.get(elevenCharKey).containsKey(twelveLong))
 						elevenCharIntersections.get(elevenCharKey).put(twelveLong, plotID);
-					
+					// EVEN AT 12 CHAR LEVEL, SOME OTHER PLOT HAS CLAIMED THIS GEOHASH-ID
 					else {
+						// IN THIS CASE< ACTUAL POLY SHAPE IS STORED AS A LAST DITCH SCENARIO
 						if(plotShapeToPlotID.get(twelveLong) == null)
 							plotShapeToPlotID.put(twelveLong, new HashMap<>());
 						plotShapeToPlotID.get(twelveLong).put(poly, plotID);
@@ -419,6 +448,7 @@ public class HashGrid{
 		return true;
 	}
 	
+	// CONVERTING AN INDEX ID TO CORRESPONDING GEOHASH
 	public String indexToGroupHash(int idx) throws HashGridException {
 		//Determine how long of a hash an index of this object represents
 		int numChars = this.precision-this.baseHash.length();
@@ -434,7 +464,7 @@ public class HashGrid{
 
 	public boolean addPoint(Coordinates coords) {
 		String geohash = GeoHash.encode(coords, this.precision);
-		logger.info("RIKI: CURRENT POINT: "+coords+" "+geohash);
+		//logger.info("RIKI: CURRENT POINT: "+coords+" "+geohash);
 		try {
 			return addPoint(geohash);
 		} catch (BitmapException e) {
@@ -577,6 +607,10 @@ public class HashGrid{
 	}
 	
 	public int[] query(Bitmap queryBitmap){
+		
+		//logger.info("RIKI: MASTER BITMAP: "+ this.bmp);
+		//logger.info("RIKI: QUERY BITMAP: "+ queryBitmap);
+		
 		return this.bmp.and(queryBitmap).toArray();
 	}
 
@@ -607,203 +641,16 @@ public class HashGrid{
 		return height;
 	}
 	
-	
-	
-	// POPULATING THE COLORADO SHAPE FILES
-	public static void main(String arg[]) {
-		
-		/*
-		 * Map<Integer, String> plotToGenotypeMap = new HashMap<Integer, String>();
-		 * 
-		 * String filePath =
-		 * "/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/grid/genotype.csv";
-		 * 
-		 * readGenotypeCsv(filePath, plotToGenotypeMap);
-		 */
-		
-		//checkJsonFile();
-		
-		/*String baseHash = "9xjr6b";
-		String a1 = "9xjr6bbpbpb";
-		String a2 = "9xjr6bpbpbp";
-		
-		HashGrid hashGrid = new HashGrid(baseHash, 11, a1, a2);
-		try {
-			hashGrid.locatePoint(new Coordinates(40.6531105521f,-104.995681f));
-		} catch (BitmapException e) {
-			e.printStackTrace();
-		}*/
+	// direction se, sw, nw, ne
+	public void getIntercepts(String geohash, int direction) {
+		int basePrecision = baseHash.length();
+		int cellPrecision = geohash.length();
 		
 		
-		String filePath = "/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/genotype.csv";
-		Map<Integer, String> plotToGenotypeMap = new HashMap<Integer, String>();
-		readGenotypeCsv(filePath, plotToGenotypeMap);
-		
-	}
-	
-	
-	
-	
-	
-	public static void readGenotypeCsv(String filePath, Map<Integer, String> plotToGenotypeMap) {
-		
-		BufferedReader reader;
-		
-		try {
-			reader = new BufferedReader(new FileReader(filePath));
-			String line = reader.readLine();
-			
-			line = reader.readLine();
-			while (line != null) {
-				String[] tokens = line.split(",");
-				
-				String genoType = tokens[0];
-				int plotId = Integer.valueOf(tokens[2]);
-				
-				plotToGenotypeMap.put(plotId, genoType);
-				// read next line
-				line = reader.readLine();
-			}
-			reader.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		
-		StringBuffer sb = new StringBuffer("");
-		String plotsString = "";
-		
-		plotToGenotypeMap = new HashMap<Integer, String>();
-		
-		filePath = "/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/plots_new.json";
-		try {
-			reader = new BufferedReader(new FileReader(filePath));
-			String line = reader.readLine();
-			
-			while (line != null) {
-				sb.append(line);
-				line = reader.readLine();
-			}
-			reader.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		plotsString = sb.toString();
-		//appendToJson(plotsString, plotToGenotypeMap);
-		
-		getBoundsOfShapeFile(plotsString);
-		
-	}
-	
-	public static void getBoundsOfShapeFile(String fullJson) {
-		
-		double highLat = 0d;
-		double lowLat = 90d;
-		
-		double highLon = -180d;
-		double lowLon = 0d;
-		
-		
-		JSONObject fsJSON = new JSONObject(fullJson);
-		
-		JSONArray geometries = (JSONArray)fsJSON.get("features");
-		
-		for (Object o : geometries){
-			
-			JSONArray coords = ((JSONArray) ((JSONObject) ((JSONObject) o).get("geometry")).get("coordinates"));
-			
-			for (int i = 1; i < ((JSONArray) coords.get(0)).length(); i++) {
-				double lat = ((JSONArray) ((JSONArray) coords.get(0)).get(i)).getDouble(1);
-				double lon = ((JSONArray) ((JSONArray) coords.get(0)).get(i)).getDouble(0);
-				
-
-				if(lat < lowLat)
-					lowLat = lat;
-				if(lat > highLat)
-					highLat = lat;
-				
-				if(lon < lowLon)
-					lowLon = lon;
-				if(lon > highLon)
-					highLon = lon;
-				
-				
-			}
-			
-			
-		}
-		
-		System.out.println("LATITUDES: "+lowLat+" "+highLat);
-		System.out.println("LONGITUDES: "+lowLon+" "+highLon);
 		
 		
 		
 	}
-	
-	
-	public static void appendToJson(String fullJson, Map<Integer, String> plotToGenotypeMap) {
-		
-		JSONObject fsJSON = new JSONObject(fullJson);
-		
-		JSONArray geometries = (JSONArray)fsJSON.get("features");
-		
-		for (Object o : geometries){
-			
-		
-			JSONObject properties = (JSONObject)(((JSONObject)o).get("properties"));
-			int plotID = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("plotID");
-			
-			String genotype = plotToGenotypeMap.get(plotID);
-			
-			
-			if(plotToGenotypeMap.get(plotID)!=null) {
-				properties.put("Genotype", genotype);
-			} else {
-				properties.put("Genotype", "GENO"+ThreadLocalRandom.current().nextInt(100));
-			}
-			//String genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
-			
-		}
-		
-		System.out.println(fsJSON.toString());
-		
-		
-		try (PrintWriter out = new PrintWriter("/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/plots_updated.json")) {
-		    out.println(fsJSON.toString());
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-	}
-	
-	
-	
-	public static void checkJsonFile() {
-		
-		StringBuffer sb = new StringBuffer("");
-		String plotsString = "";
-		BufferedReader reader;
-		String filePath = "/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/plots_sample.json";
-		try {
-			reader = new BufferedReader(new FileReader(filePath));
-			String line = reader.readLine();
-			
-			while (line != null) {
-				sb.append(line);
-				line = reader.readLine();
-			}
-			reader.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		plotsString = sb.toString();
-		
-		JSONObject fsJSON = new JSONObject(plotsString);
-		
-		System.out.println(fsJSON.toString());
-	}
-	
-	
 	
 	
 	

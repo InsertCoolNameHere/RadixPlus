@@ -60,6 +60,7 @@ import galileo.bmp.GeoavailabilityQuery;
 import galileo.bmp.HashGrid;
 import galileo.bmp.HashGridException;
 import galileo.comm.TemporalType;
+import galileo.config.SystemConfig;
 import galileo.dataset.Block;
 import galileo.dataset.Coordinates;
 import galileo.dataset.Metadata;
@@ -71,6 +72,7 @@ import galileo.dataset.TemporalProperties;
 import galileo.dataset.feature.Feature;
 import galileo.dataset.feature.FeatureSet;
 import galileo.dataset.feature.FeatureType;
+import galileo.dht.DataStoreHandler;
 import galileo.dht.GroupInfo;
 import galileo.dht.NetworkInfo;
 import galileo.dht.NodeInfo;
@@ -85,6 +87,8 @@ import galileo.dht.hash.TemporalHash;
 import galileo.graph.FeaturePath;
 import galileo.graph.MetadataGraph;
 import galileo.graph.Path;
+import galileo.graph.SummaryStatistics;
+import galileo.graph.SummaryWrapper;
 import galileo.query.Expression;
 import galileo.query.Operation;
 import galileo.query.Operator;
@@ -112,7 +116,7 @@ public class GeospatialFileSystem extends FileSystem {
 	private static final String DEFAULT_TIME_FORMAT = "yyyy" + File.separator + "M" + File.separator + "d";
 	private static final int MIN_GRID_POINTS = 5000;
 	private int numCores;
-	private static GeoavailabilityGrid globalGrid;
+	//private static GeoavailabilityGrid globalGrid;
 	private static final String pathStore = "metadata.paths";
 	private final StorageNode master;
 	private NetworkInfo network;
@@ -140,19 +144,21 @@ public class GeospatialFileSystem extends FileSystem {
 	private String earliestSpace;
 	private Set<String> geohashIndex;
 	
-	private int temporalIndex = 0;
-	private int latIndex = 11;
-	private int lonIndex = 12;
-	private boolean timeIsEpoch = true;
-
+	
 	private static final String TEMPORAL_YEAR_FEATURE = "x__year__x";
 	private static final String TEMPORAL_MONTH_FEATURE = "x__month__x";
 	private static final String TEMPORAL_DAY_FEATURE = "x__day__x";
 	private static final String TEMPORAL_HOUR_FEATURE = "x__hour__x";
 	private static final String SPATIAL_FEATURE = "x__spatial__x";
+	
+	// A MAP BETWEEN THE FILEPATH AND THE CORRESPONDING SUMMARY OF THAT PLOT FILE
+	// JUST FILENAME IS ENOUGH FOR KEY
+	private Map<String, SummaryStatistics> filePathToSummaryMap = new HashMap<String, SummaryStatistics>();
+	private HashGrid globalGrid;
+	private FilesystemConfig configs;
 
 	public GeospatialFileSystem(StorageNode sn, String storageDirectory, String name, int precision, int nodesPerGroup,
-			int temporalType, NetworkInfo networkInfo, String featureList, SpatialHint sHint, boolean ignoreIfPresent)
+			int temporalType, NetworkInfo networkInfo, String featureList, SpatialHint sHint, boolean ignoreIfPresent, FilesystemConfig config)
 			throws FileSystemException, IOException, SerializationException, PartitionException, HashException,
 			HashTopologyException {
 		super(storageDirectory, name, ignoreIfPresent, "geospatial");
@@ -170,6 +176,10 @@ public class GeospatialFileSystem extends FileSystem {
 			}
 			this.featureList = Collections.unmodifiableList(this.featureList);
 		}
+		
+		this.configs = config;
+		
+		
 		this.spatialHint = sHint;
 		if (this.featureList != null && this.spatialHint == null)
 			throw new IllegalArgumentException("Spatial hint is needed when feature list is provided");
@@ -197,27 +207,8 @@ public class GeospatialFileSystem extends FileSystem {
 				}
 			}
 		}
-
-		//logger.info("RIKI: REACHED HERE3");
-		/*
-		 * TODO: Ask end user about the partitioning scheme. chronospatial or
-		 * spatiotemporal. Accordingly, use TemporalHierarchyPartitioner or
-		 * SpatialHierarchyPartitioner
-		 **/
-//		this.partitioner = new OriginalTemporalHierarchyPartitioner(sn, this.network, this.temporalType.getType());
-		// Geohashes for US region and also Philippines (only for testing)
-		//String[] geohashes = {// "8g", "8u", "8v", "8x", "8y", "8z", "94", "95", "96", "97", "9d", "9e", "9g", "9h", "9j",
-//				"9k", "9m", "9n", "9p", "9q", "9r", "9s", "9t", "9u", "9v", "9w", "9x", "9y", "9z", "b8", "b9", "bb",
-//				"bc", "bf", "c0", "c1", "c2", "c3", "c4", "c6", "c8", "c9", "cb", "cc", "cd", "cf", "d4", "d5", "d6",
-//				"d7", "dd", "de", "dh", "dj", "dk", "dm", "dn", "dp", "dq", "dr", "ds", "dt", "dw", "dx", "dz", "f0",
-//				"f1", "f2", "f3", "f4", "f6", "f8", "f9", "fb", "fc", "fd", "ff",
-				
-				//"wdw0x995","wdw0x994","wdw0x9c3","wdw0x98g","wdw0x9c2","wdw0x98f","wdw0x9c1","wdw0x98e","wdw0x9c0",
-				//"wdw0x98d","wdw0x98c","wdw0x98b","wdw0x9c4","wdw0x98x","wdw0x9bb","wdw0x98w","wdw0x98v","wdw0x98u",
-				//"wdw0x98t","wdw0x98s","wdw0x9bf","wdw0x98z","wdw0x989","wdw0x98y","wdw0x9bc","wdw0x99h","wdw0x991",
-				//"wdw0x990","wdw0x99p","wdw0x9b8","wdw0x99n","wdw0x99j"};
 		
-		String[] geohashes = {"9xjr6b86","9xjr6b87","9xjr6b88","9xjr6b89","9xjr6b07","9xjr6b82","9xjr6b83","9xjr6b96","9xjr6b97","9xjr6b98","9xjr6b99",
+		/*String[] geohashes = {"9xjr6b86","9xjr6b87","9xjr6b88","9xjr6b89","9xjr6b07","9xjr6b82","9xjr6b83","9xjr6b96","9xjr6b97","9xjr6b98","9xjr6b99",
 				"9xjr6b15","9xjr6b17","9xjr6b8b","9xjr6b8c","9xjr6b8d","9xjr6b90","9xjr6b91","9xjr6b92","9xjr6b93","9xjr6b94","9xjr6b95","9xjr6b2q",
 				"9xjr6b2r","9xjr6b2s","9xjr6b2t","9xjr6b2u","9xjr6b2v","9xjr6b2w","9xjr6b2x","9xjr6b2y","9xjr6b2z","9xjr6b2b","9xjr6b2c","9xjr6b2d",
 				"9xjr6b2e","9xjr6b2f","9xjr6b2g","9xjr6b2k","9xjr6b2m","9xjr6b3p","9xjr6b3q","9xjr6b3r","9xjr6b3s","9xjr6b3t","9xjr6b3u","9xjr6b3v",
@@ -228,7 +219,9 @@ public class GeospatialFileSystem extends FileSystem {
 				"9xjr6b8s","9xjr6b0k","9xjr6b8t","9xjr6b30","9xjr6b1n","9xjr6b9v","9xjr6b31","9xjr6b9w","9xjr6b32","9xjr6b1p","9xjr6b33","9xjr6b1q",
 				"9xjr6b9y","9xjr6b34","9xjr6b1r","9xjr6b35","9xjr6b1s","9xjr6b36","9xjr6b1t","9xjr6b37","9xjr6b1u","9xjr6b38","9xjr6b1v","9xjr6b39",
 				"9xjr6b1w","9xjr6b1x","9xjr6b1y","9xjr6b1z","9xjr6b9f","9xjr6b9g","9xjr6b9h","9xjr6b9j","9xjr6b9k","9xjr6b9m","9xjr6b1e","9xjr6b9n",
-				"9xjr6b1g","9xjr6b1h","9xjr6b9q","9xjr6b1j","9xjr6b9s","9xjr6b1k","9xjr6b9t","9xjr6b1m","9xjr6b9u"};
+				"9xjr6b1g","9xjr6b1h","9xjr6b9q","9xjr6b1j","9xjr6b9s","9xjr6b1k","9xjr6b9t","9xjr6b1m","9xjr6b9u"};*/
+		
+		String[] geohashes = configs.getAllGeohashes();
 		
 		
 		// HANDLING FOR COLORADO PLOTS
@@ -248,10 +241,30 @@ public class GeospatialFileSystem extends FileSystem {
 		this.timeFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
 		this.timeFormatter.applyPattern(timeFormat);
 		this.pathJournal = new PathJournal(this.storageDirectory + File.separator + pathStore);
+		
+		// EXAMPLE OF pathToGridFile: /s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/grid/roots_az/plots.json
+		String pathToGridFile = SystemConfig.getConfDir()+File.separator+"grid"+File.separator+name;
+		
+		if(config.getGridFilePath() != null && !config.getGridFilePath().trim().isEmpty()) {
+			pathToGridFile = config.getGridFilePath();
+		}
+		
+		try {
+			
+			globalGrid = new HashGrid(configs.getBaseHashForGrid(), configs.getHashGridPrecision(), configs.getNw(), configs.getSe());
+			// THIS READS THE PLOTS.JSON FILE AND MARKS THE PLOTS ON THE HASHGRID
+			//globalGrid.initGrid(pathToGridFile+File.separator+gridFiles[0].getName());
+			globalGrid.initGrid(pathToGridFile);
+		} catch (IOException | HashGridException | BitmapException e) {
+			logger.log(Level.SEVERE, "could not open grid initialization file. Error: " + e);
+		}
+		
+		
+		
+		
 		setType("geospatial");
 		createMetadataGraph();
 	}
-	
 	
 	private static String[] generateGeohashes(String[] baseGeohashes, int desiredPrecision) {
 		List<String> allGeoHashes = new ArrayList<String>(Arrays.asList(baseGeohashes));
@@ -374,8 +387,93 @@ public class GeospatialFileSystem extends FileSystem {
 		state.put("latestTime", this.latestTime != null ? this.latestTime.getEnd() : JSONObject.NULL);
 //		state.put("latestSpace", this.latestSpace != null ? this.latestSpace : JSONObject.NULL);
 		state.put("readOnly", this.isReadOnly());
+		
+		// PERSISTING CONFIG
+		JSONObject fsConfig = configs.getJsonRepresentation();
+		state.put("fsconfig", fsConfig);
+		
+		// PERSISTING SUMMARIES
+		
+		//filePathToSummaryMap
+		JSONArray summaryMaps = getSummariesToJSON(filePathToSummaryMap);
+		state.put("summaryMaps", summaryMaps);
+		
+		
 		return state;
 	}
+	
+	/*public static JSONObject obtainStateTest(Map<String, SummaryStatistics> filePathToSummaryMap1) {
+		JSONObject state = new JSONObject();
+		JSONArray summaryMaps = getSummariesToJSON(filePathToSummaryMap1);
+		state.put("summaryMaps", summaryMaps);
+		
+		return state;
+		
+	}*/
+
+
+	private JSONArray getSummariesToJSON(Map<String, SummaryStatistics> filePathToSummaryMap1) {
+		
+		JSONArray summaryMaps = new JSONArray();
+		
+		for(String summary_path : filePathToSummaryMap1.keySet()) {
+			
+			JSONObject mainObject = new JSONObject();
+			
+			SummaryStatistics summary = filePathToSummaryMap1.get(summary_path);
+			
+			JSONObject json_summary = summary.getJsonRepresentation();
+			
+			mainObject.put("key", summary_path);
+			mainObject.put("val", json_summary);
+			
+			summaryMaps.put(mainObject);
+		}
+		return summaryMaps;
+	}
+	
+
+	public static Map<String, SummaryStatistics> extractSummaryMapFromJson(JSONArray summaryMapJson) {
+		
+		Map<String, SummaryStatistics> pathToSummaryMap = new HashMap<String, SummaryStatistics>();
+		for(int i=0; i<summaryMapJson.length(); i++) {
+			JSONObject mainObject = summaryMapJson.getJSONObject(i);
+			
+			String key = mainObject.getString("key");
+			JSONObject json_summary = mainObject.getJSONObject("val");
+			
+			SummaryStatistics ss = new SummaryStatistics();
+			ss.populateObject(json_summary);
+			
+			pathToSummaryMap.put(key, ss);
+		}
+		return pathToSummaryMap;
+	}
+	/*
+	public static void restoreStateTest(JSONObject state) {
+		// READING IN SUMMARY DATA
+		JSONArray summaryMapJson = state.getJSONArray("summaryMaps");
+		Map<String, SummaryStatistics> summaryMaps = extractSummaryMapFromJson(summaryMapJson);
+		System.out.println(summaryMaps.size());
+	}
+	
+	
+	public static void main(String arg[]) {
+		SummaryStatistics ss = new SummaryStatistics();
+		ss.setAvg(100);ss.setMin(101);ss.setMax(102);ss.setCount(103);ss.setStdDev(104);
+		
+		SummaryStatistics ss1 = new SummaryStatistics();
+		ss.setAvg(100);ss.setMin(101);ss.setMax(102);ss.setCount(103);ss.setStdDev(104);
+		
+		Map<String, SummaryStatistics> maps = new HashMap<String, SummaryStatistics>();
+		maps.put("path1", ss);
+		maps.put("path2", ss1);
+		
+		JSONObject obtainStateTest = obtainStateTest(maps);
+		
+		restoreStateTest(obtainStateTest);
+	}
+	*/
 
 	public static GeospatialFileSystem restoreState(StorageNode storageNode, NetworkInfo networkInfo, JSONObject state)
 			throws FileSystemException, IOException, SerializationException, PartitionException, HashException,
@@ -394,8 +492,14 @@ public class GeospatialFileSystem extends FileSystem {
 //			JSONObject spHintJSON = state.getJSONObject("spatialHint");
 //			spHint = new SpatialHint(spHintJSON.getString("latHint"), spHintJSON.getString("lngHint"));
 //		}
+		
+		FilesystemConfig fsc = new FilesystemConfig();
+		fsc.populateObject(state.getJSONObject("fsconfig"));
+		
+		// FS CONFIGS ARE READ IN THE CONSTRUCTOR
 		GeospatialFileSystem gfs = new GeospatialFileSystem(storageNode, storageRoot, name, geohashPrecision,
-				nodesPerGroup, temporalType, networkInfo, featureList, spHint, true);
+				nodesPerGroup, temporalType, networkInfo, featureList, spHint, true, fsc);
+		
 		gfs.earliestTime = (state.get("earliestTime") != JSONObject.NULL)
 				? new TemporalProperties(state.getLong("earliestTime")) : null;
 //		gfs.earliestSpace = (state.get("earliestSpace") != JSONObject.NULL) ? state.getString("earliestSpace") : null;
@@ -406,8 +510,17 @@ public class GeospatialFileSystem extends FileSystem {
 		for (int i = 0; i < geohashIndices.length(); i++)
 			geohashIndex.add(geohashIndices.getString(i));
 		gfs.geohashIndex = geohashIndex;
+		
+		
+		
+		// READING IN SUMMARY DATA
+		JSONArray summaryMapJson = state.getJSONArray("summaryMaps");
+		Map<String, SummaryStatistics> summaryMaps = extractSummaryMapFromJson(summaryMapJson);
+		gfs.filePathToSummaryMap = summaryMaps;
+		
 		return gfs;
 	}
+	
 
 	public long getLatestTime() {
 		if (this.latestTime != null)
@@ -473,6 +586,72 @@ public class GeospatialFileSystem extends FileSystem {
 			geohash = GeoHash.encode(sp.getCoordinates(), this.geohashPrecision);
 		}
 		return geohash;
+	}
+	
+	// FOR ARIZONA PLOTS, WE STORE ACTUAL DATA, NOT JUST FILEPATH
+	public String storeBlockArizona(Block block, String sensorType, SummaryStatistics summary, String irodsStoragePath) throws FileSystemException, IOException {
+		
+		Metadata meta = block.getMetadata();
+		String name = "";
+		if (meta.getName() != null && meta.getName().trim() != "")
+			name = meta.getName();
+		String blockDirPath = this.storageDirectory + File.separator + getStorageDirectory(block);
+		String blockPath = blockDirPath + File.separator + name + FileSystem.BLOCK_EXTENSION;
+		String metadataPath = blockDirPath + File.separator + name + FileSystem.METADATA_EXTENSION;
+		
+		/* Ensure the storage directory is there. */
+ 		File blockDirectory = new File(blockDirPath);
+ 		if (!blockDirectory.exists()) {
+ 			if (!blockDirectory.mkdirs()) {
+ 				throw new IOException("Failed to create directory (" + blockDirPath + ") for block.");
+ 			}
+ 		}
+
+ 		Serializer.persist(block.getMetadata(), metadataPath);
+ 		File gblock = new File(blockPath);
+ 		boolean newLine = gblock.exists();
+ 		
+ 		// ADDING OF METADATA TO METADATA GRAPH
+ 		//if (!newLine)
+ 		
+ 		// IRRESPECTIVE OF WHETHER THIS PATH HAS ALREADY BEEN STORED OR NOT, WE NEED TO UPDATE THE METADATA
+ 		storeMetadata(meta, blockPath+"$$"+irodsStoragePath);
+
+ 		try (FileOutputStream blockData = new FileOutputStream(blockPath, false)) {//overwrite block data, since only storing paths
+ 			if (newLine)
+ 				blockData.write("\n".getBytes("UTF-8"));
+ 			blockData.write(block.getData());
+ 			blockData.close();
+ 		} catch (Exception e) {
+ 			throw new FileSystemException("Error storing block: " + e.getClass().getCanonicalName(), e);
+ 		}
+ 		if (latestTime == null || latestTime.getEnd() < meta.getTemporalProperties().getEnd()) {
+			this.latestTime = meta.getTemporalProperties();
+		}
+
+		if (earliestTime == null || earliestTime.getStart() > meta.getTemporalProperties().getStart()) {
+			this.earliestTime = meta.getTemporalProperties();
+		}
+		// ADDING THE SUMMARY STATISTICS FOR THIS PLOT
+		// DURING NORMAL BLOCK STORAGE, SUMMARIES ARE NOT ACCUMULATED
+		// THE SUMMARIES ARE ACCUMULATED LATER DURING SYNCHRONIZATION
+		
+		synchronized (filePathToSummaryMap) {
+			
+			SummaryStatistics old_summary = filePathToSummaryMap.get(blockPath);
+			
+			if(old_summary == null) {
+				
+				filePathToSummaryMap.put(blockPath, summary);
+			} else {
+				// Merging summaries
+				SummaryStatistics newSummary = SummaryStatistics.mergeSummary(old_summary, summary);
+				filePathToSummaryMap.put(blockPath, newSummary);
+				
+			}
+		}
+			
+		return blockPath;
 	}
 
 	/**
@@ -636,7 +815,7 @@ public class GeospatialFileSystem extends FileSystem {
 					query.addOperation(op);
 				}
 			}
-			logger.info(query.toString());
+			//logger.info(query.toString());
 			return query;
 		} else if (q1 != null) {
 			return q1;
@@ -668,7 +847,7 @@ public class GeospatialFileSystem extends FileSystem {
 	}
 
 	private List<Path<Feature, String>> executeParallelQuery(Query finalQuery) throws InterruptedException {
-		logger.info("Query: " + finalQuery.toString());
+		//logger.info("Query: " + finalQuery.toString());
 		List<Path<Feature, String>> paths = new ArrayList<>();
 		List<Operation> operations = finalQuery.getOperations();
 		if (operations.size() > 0) {
@@ -705,7 +884,7 @@ public class GeospatialFileSystem extends FileSystem {
 	}
 
 	public Map<String, List<String>> listBlocks(String temporalProperties, List<Coordinates> spatialProperties,
-			Query metaQuery, boolean group) throws InterruptedException {
+			Query metaQuery, boolean group, String sensorName) throws InterruptedException {
 		Map<String, List<String>> blockMap = new HashMap<String, List<String>>();
 		String space = null;
 		List<Path<Feature, String>> paths = null;
@@ -752,90 +931,101 @@ public class GeospatialFileSystem extends FileSystem {
 					new Operation(temporalExpressions.toArray(new Expression[temporalExpressions.size()])));
 			paths = metadataGraph.evaluateQuery(queryIntersection(query, metaQuery));
 		} else if (spatialProperties != null) {
+			// THIS IS WHERE POLYGON QUERY ENTERS
+			logger.info("RIKI: PERFORMING SPATIAL QUERY");
+			
 			SpatialProperties sp = new SpatialProperties(new SpatialRange(spatialProperties));
 			List<Coordinates> geometry = sp.getSpatialRange().hasPolygon() ? sp.getSpatialRange().getPolygon()
 					: sp.getSpatialRange().getBounds();
 			space = getSpatialString(sp);
-			List<String> hashLocations = new ArrayList<>(Arrays.asList(GeoHash.getIntersectingGeohashes(geometry, Partitioner.SPATIAL_PRECISION)));
+			
+			logger.info("QUERY POLYGON: "+ geometry);
+			
+			List<String> hashLocations = new ArrayList<>(Arrays.asList(GeoHash.getIntersectingGeohashes(geometry, Partitioner.SPATIAL_PRECISION+2)));
+			
+			//List<String> hashLocations = new ArrayList<>(Arrays.asList(GeoHash.getIntersectingGeohashes(geometry, getGlobalGrid().getPrecision())));
+			
+			//logger.info("RIKI: HASHLOCATIONS: "+getGlobalGrid().getPrecision()+" "+hashLocations.size()+" "+hashLocations);
+			
+			
+			// 9 geohash precision to find what geohash bozes intersect with the polygon
+			if(Partitioner.SPATIAL_PRECISION < getGlobalGrid().getPrecision()) {
+				List<String> finerGeohashes = new ArrayList<String>();
+				
+				for(String h: hashLocations) {
+					List<String> tmp = GeoHash.getInternalGeohashes(h, getGlobalGrid().getPrecision());
+					if(tmp != null && tmp.size() > 0)
+						finerGeohashes.addAll(tmp);
+				}
+				
+				hashLocations = finerGeohashes;
+			}
+			
 			Query query = new Query();
 //			Polygon polygon = GeoHash.buildAwtPolygon(geometry);
 			//Eliminate all geohashes that don't intersect with hashGrid
-			HashGrid queryGrid = new HashGrid("wdw0x9", master.getGlobalGrid().getPrecision(), "wdw0x9bpbpb", "wdw0x9pbpbp");
+			
+			//HashGrid queryGrid = new HashGrid("wdw0x9", master.getGlobalGrid().getPrecision(), "wdw0x9bpbpb", "wdw0x9pbpbp");
+			
+			//HashGrid queryGrid = new HashGrid(StorageNode.baseHash, master.getGlobalGrid().getPrecision(), StorageNode.a1, StorageNode.a2);
+			HashGrid queryGrid = new HashGrid(configs.getBaseHashForGrid(), getGlobalGrid().getPrecision(), configs.getNw(), configs.getSe());
+			
+			//logger.info("RIKI: HERE X1");
 			for (String ghash : hashLocations)
 				try {
 					queryGrid.addPoint(ghash);
 				} catch (BitmapException e1) {
 				}
 			queryGrid.applyUpdates();
-			int [] intersections = master.getGlobalGrid().query(queryGrid.getBitmap());
+			
+			//logger.info("RIKI: HERE X2");
+			
+			//logger.info("RIKI: MASTER PRECISION: "+ master.getGlobalGrid().getPrecision());
+			//logger.info("RIKI: QUERY GRID BITMAP: "+ queryGrid.getBitmap());
+			
+			int [] intersections = getGlobalGrid().query(queryGrid.getBitmap());
+			
+			//logger.info("RIKI: HERE X3");
+			
+			//logger.info("RIKI: INTERSECTING GEOHASHES: "+intersections);
 			hashLocations.clear();
+			
+			
 			for (Integer i : intersections)
 				try {
-					hashLocations.add(master.getGlobalGrid().indexToGroupHash(i));
+					hashLocations.add(getGlobalGrid().indexToGroupHash(i));
 				} catch (HashGridException e1) {
 				}
+			
+			//logger.info("RIKI: INTERSECTING GEOHASHES FOR GRID: "+hashLocations);
 			//Once coverage is computed, query hashgrid to determine which plots are contained in polygon
 			Set<Integer> overlappingPlots = new HashSet<>();
 			for (String ghash : hashLocations) {
 				Set<Integer> plots;
 				try {
-					plots = master.getGlobalGrid().locatePoint(ghash);
+					plots = getGlobalGrid().locatePoint(ghash);
 					overlappingPlots.addAll(plots);
 				} catch (BitmapException e) {
 					//If this error is caught, it means there is no data for given index
 				}
 			}
-			//simplify query so there's not thousands of plotID=x AND plotID=y AND ...
-//			ArrayList<Integer> allPlots = new ArrayList<>();
-//			for (Integer i : overlappingPlots)
-//				allPlots.add(i);
-//			Collections.sort(allPlots);
-//			
-//			int from = allPlots.get(0);
-//			int to = allPlots.get(0);
-//			for (int i = 1; i < allPlots.size(); i++) {
-//				if (allPlots.get(i) == to + 1)
-//					to = allPlots.get(i);
-//				else {
-//					Operation op = new Operation();
-//					op.addExpressions(new Expression(Operator.GREATEREQUAL, new Feature("plotID", from)), new Expression(Operator.LESSEQUAL, new Feature("plotID", to)));
-//					query.addOperation(op);
-//					from = allPlots.get(i);
-//					to = allPlots.get(i);
-//				}
-//			}
+			
+			logger.info("RIKI: OVERLAPPING PLOTS FOUND: "+ overlappingPlots);
+			
+			/* Operations: OR; Expressions: AND. So create your operations accordingly */
+			
 			for (int intersection : overlappingPlots) {//intersections are the 5-char intersections...
 //				overlappingPlots.add(master.getGlobalGrid().locatePoint(intersection));
 				Operation op = new Operation();
 				op.addExpressions(new Expression(Operator.EQUAL, new Feature("plotID", intersection)));
+				// EXTRA SENSORNAME QUERY ADDED FOR ARIZONA ONLY
+				if(sensorName!=null && !sensorName.trim().isEmpty()) {
+					op.addExpressions(new Expression(Operator.EQUAL, new Feature("sensorType", sensorName.trim())));
+				}
 				query.addOperation(op);
-			}//Once all plot numbers are identified, return all blocks for these plots
-			
-			
-//			for (String geohash : hashLocations) {
-//				Set<GeoHash> intersections = new HashSet<>();
-//				String pattern = "%" + (geohash.length() * GeoHash.BITS_PER_CHAR) + "s";
-//				String binaryHash = String.format(pattern, Long.toBinaryString(GeoHash.hashToLong(geohash)));
-//				GeoHash.getGeohashPrefixes(polygon, new GeoHash(binaryHash.replace(" ", "0")),
-//						this.geohashPrecision * GeoHash.BITS_PER_CHAR, intersections);
-//				logger.info("baseHash: " + geohash + ", intersections: " + intersections.size());
-//				for (GeoHash gh : intersections) {
-//					String[] hashRange = gh.getValues(this.geohashPrecision);
-//					if (hashRange != null) {
-//						Operation op = new Operation();
-//						if (hashRange.length == 1)
-//							op.addExpressions(
-//									new Expression(Operator.EQUAL, new Feature(SPATIAL_FEATURE, hashRange[0])));
-//						else {
-//							op.addExpressions(
-//									new Expression(Operator.GREATEREQUAL, new Feature(SPATIAL_FEATURE, hashRange[0])));
-//							op.addExpressions(
-//									new Expression(Operator.LESSEQUAL, new Feature(SPATIAL_FEATURE, hashRange[1])));
-//						}
-//						query.addOperation(op);
-//					}
-//				}
-//			}
+				
+				
+			}
 			paths = executeParallelQuery(queryIntersection(query, metaQuery));
 		} else {
 			// non-chronal non-spatial
@@ -986,6 +1176,9 @@ public class GeospatialFileSystem extends FileSystem {
 
 	@Override
 	public void storeMetadata(Metadata metadata, String blockPath) throws FileSystemException, IOException {
+		
+		/* FeaturePath has a list of Vertices, each label in a vertex representing a feature */
+		/* BlockPath is the actual path to the block */
 		FeaturePath<String> path = createPath(blockPath, metadata);
 		pathJournal.persistPath(path);
 		storePath(path);
@@ -1019,7 +1212,7 @@ public class GeospatialFileSystem extends FileSystem {
 			paths.add(line.split(",", splitLimit));
 		return paths;
 	}
-
+	
 	private boolean isGridInsidePolygon(GeoavailabilityGrid grid, GeoavailabilityQuery geoQuery) {
 		Polygon polygon = new Polygon();
 		for (Coordinates coords : geoQuery.getPolygon()) {
@@ -1224,35 +1417,100 @@ public class GeospatialFileSystem extends FileSystem {
 		}
 	}
 
-	public int getTemporalIndex() {
-		return temporalIndex;
+	public int getDataLatIndex(String fileSensorType) {
+		return configs.getLatIndex(fileSensorType);
+	}
+	
+	public int getDataTemporalIndex(String fileSensorType) {
+		return configs.getTemporalIndex(fileSensorType);
+	}
+	
+	public int getDataReadingIndex(String fileSensorType) {
+		return configs.getDataIndex(fileSensorType);
 	}
 
-	public void setTemporalIndex(int temporalIndex) {
-		this.temporalIndex = temporalIndex;
+	public boolean isTimeTimestamp() {
+		return configs.isTimeTimestamp();
+	}
+	
+	public String getDateFormat() {
+		return configs.getDateFormat();
 	}
 
-	public int getLatIndex() {
-		return latIndex;
+	
+	public SummaryStatistics getStatistics(String key) {
+		
+		return filePathToSummaryMap.get(key);
+		
+		
+	}
+	
+	public Map<String, SummaryStatistics> getfilePathToSummaryMap() {
+		return filePathToSummaryMap;
 	}
 
-	public void setLatIndex(int latIndex) {
-		this.latIndex = latIndex;
+
+	public void putSummaryData(SummaryStatistics merged, String absolutePath) {
+		filePathToSummaryMap.put(absolutePath, merged);
+		
+	}
+	
+	public String getSummaryDataString(String absolutePath) {
+		SummaryStatistics summaryStatistics = filePathToSummaryMap.get(absolutePath);
+		if(summaryStatistics!= null)
+			return summaryStatistics.toString();
+		else 
+			return "";
 	}
 
-	public int getLonIndex() {
-		return lonIndex;
+	public SummaryStatistics getSummaryData(String absolutePath) {
+		SummaryStatistics summaryStatistics = filePathToSummaryMap.get(absolutePath);
+		if(summaryStatistics!= null)
+			return summaryStatistics;
+		else 
+			return null;
 	}
 
-	public void setLonIndex(int lonIndex) {
-		this.lonIndex = lonIndex;
+	/**
+	 * GIVEN A GALILEO PATH, FIND THE PATH OF THE SAME FILE IN THE IRODS SYSTEM
+	 * @author sapmitra
+	 * @param block
+	 * @return
+	 */
+	public String getIrodsPath(String block) {
+		
+		String storageDir = storageDirectory + "";
+		int ln = storageDir.length();
+		
+		String newPath = DataStoreHandler.IRODS_BASE_PATH + block.substring(ln);
+		
+		return newPath;
 	}
 
-	public boolean isTimeIsEpoch() {
-		return timeIsEpoch;
+
+	public FilesystemConfig getConfigs() {
+		return configs;
 	}
 
-	public void setTimeIsEpoch(boolean timeIsEpoch) {
-		this.timeIsEpoch = timeIsEpoch;
+
+	public void setConfigs(FilesystemConfig configs) {
+		this.configs = configs;
 	}
+
+
+	public HashGrid getGlobalGrid() {
+		return globalGrid;
+	}
+
+
+	public void setGlobalGrid(HashGrid globalGrid) {
+		this.globalGrid = globalGrid;
+	}
+
+	public int getDataLonIndex(String fileSensorType) {
+		return configs.getLonIndex(fileSensorType);
+	}
+
+	
+	
 }

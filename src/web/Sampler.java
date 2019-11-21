@@ -70,13 +70,12 @@ public class Sampler {
 		HashMap<NodeInfo, Integer> dests = new HashMap<>();
 		/*There surely must be a better way to initialize a query grid?*/
 		//HashGrid queryGrid = new HashGrid("wdw0x9", grid.getPrecision(), "wdw0x9bpbpb", "wdw0x9pbpbp");
-		
-		HashGrid queryGrid = new HashGrid(StorageNode.baseHash, grid.getPrecision(), StorageNode.a1, StorageNode.a2);
+		HashGrid queryGrid = new HashGrid(grid.getBaseHash(), grid.getPrecision(), StorageNode.a1, StorageNode.a2);
 		for (String line : lines){
 			
 			double lat = Double.parseDouble(line.split(",")[latIndex]);
 			double lon = Double.parseDouble(line.split(",")[lonIndex]); //hard code index #1 and #2 to be lat and long. WILL CHANGE
-			logger.info("RIKI:PT:"+lat+","+lon);
+			//logger.info("RIKI:PT:"+lat+","+lon);
 			queryGrid.addPoint(new Coordinates(lat, lon));
 		}
 		/*Ensure that all points were added*/

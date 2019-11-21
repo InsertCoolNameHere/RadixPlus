@@ -57,11 +57,13 @@ public class Connector implements MessageListener {
 	}
 	
 	public Event sendMessage(NetworkDestination server, Event request) throws IOException, InterruptedException {
-		messageRouter.sendMessage(server, EventPublisher.wrapEvent(request));
-		logger.fine("Request sent. Waiting for response");
+		// RIKI MAJOR CHANGE
+		//messageRouter.sendMessage(server, EventPublisher.wrapEvent(request));
+		//logger.fine("Request sent. Waiting for response");
 		try {
 			this.latch = new CountDownLatch(1);
-			logger.info("RIKI: Latch Initialized");
+			messageRouter.sendMessage(server, EventPublisher.wrapEvent(request));
+			logger.fine("Request sent, latch initialized. Waiting for response");
 			this.latch.await();
 		} catch (InterruptedException e) {
 			throw e;
@@ -72,17 +74,16 @@ public class Connector implements MessageListener {
 	@Override
 	public void onMessage(GalileoMessage message) {
 		try {
-			logger.info("RIKI: Obtained response from Galileo");
+			//logger.info("RIKI: Obtained response from Galileo");
 			
-			Event event = this.wrapper.unwrap(message);
-			
-			if(event instanceof IRODSReadyCheckRequest) {
-				logger.info("RIKI: REQ FROM ANOTHER NODE");
-			} else if (event instanceof IRODSReadyCheckResponse) {
-				logger.info("RIKI: RESPONSE RECEIVED");
-			} else {
-				logger.info("RIKI: SOMETHING ELSE RECEIVED");
-			}
+			/*
+			 * Event event = this.wrapper.unwrap(message);
+			 * 
+			 * if(event instanceof IRODSReadyCheckRequest) {
+			 * logger.info("RIKI: REQ FROM ANOTHER NODE"); } else if (event instanceof
+			 * IRODSReadyCheckResponse) { logger.info("RIKI: RESPONSE RECEIVED"); } else {
+			 * logger.info("RIKI: SOMETHING ELSE RECEIVED"); }
+			 */
 			
 			this.response = wrapper.unwrap(message);
 		} catch (Exception e) {
@@ -108,6 +109,10 @@ public class Connector implements MessageListener {
 	@Override
 	public void onDisconnect(NetworkDestination destination) {
 		logger.fine("Disconnected from galileo on " + destination);
+	}
+
+	public ClientMessageRouter getMessageRouter() {
+		return messageRouter;
 	}
 }
 

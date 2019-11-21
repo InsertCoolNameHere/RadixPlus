@@ -66,7 +66,7 @@ public class SpatialHierarchyPartitioner extends Partitioner<Metadata> {
 			throws PartitionException, HashException, HashTopologyException {
 
 		super(storageNode, network);
-
+		SPATIAL_PRECISION = geohashes[0].length();
 		List<GroupInfo> groups = network.getGroups();
 
 		if (groups.size() == 0) {
@@ -152,6 +152,14 @@ public class SpatialHierarchyPartitioner extends Partitioner<Metadata> {
 			List<Coordinates> polygon = sp.getSpatialRange().getPolygon();
 			// Geohash precision for spatial ring is 2.
 			String[] hashes = GeoHash.getIntersectingGeohashes(polygon, Partitioner.SPATIAL_PRECISION);
+			
+			
+			String sh = "";
+			for(String h : hashes) {
+				sh+=h+",";
+			}
+			logger.info("HASHES FOUND: "+sh);
+			
 			for (String hash : hashes) {
 				Metadata metadata = new Metadata();
 				metadata.setSpatialProperties(new SpatialProperties(GeoHash.decodeHash(hash)));

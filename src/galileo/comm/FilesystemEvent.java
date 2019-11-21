@@ -32,6 +32,7 @@ import java.util.List;
 import galileo.dataset.SpatialHint;
 import galileo.dataset.feature.FeatureType;
 import galileo.event.Event;
+import galileo.fs.FilesystemConfig;
 import galileo.serialization.SerializationException;
 import galileo.serialization.SerializationInputStream;
 import galileo.serialization.SerializationOutputStream;
@@ -53,6 +54,9 @@ public class FilesystemEvent implements Event{
 	private int nodesPerGroup;
 	private List<Pair<String, FeatureType>> featureList;
 	private SpatialHint spatialHint;
+	private FilesystemConfig configs;
+	
+	private String configJsonString;
 
 	public FilesystemEvent(String name, FilesystemAction action, List<Pair<String, FeatureType>> featureList,
 			SpatialHint spatialHint) {
@@ -185,6 +189,7 @@ public class FilesystemEvent implements Event{
 			this.featureList = getFeatureList(in.readString());
 		if(in.readBoolean())
 			this.spatialHint = new SpatialHint(in);
+		this.configs = new FilesystemConfig(in);
 	}
 
 	@Override
@@ -200,6 +205,23 @@ public class FilesystemEvent implements Event{
 		out.writeBoolean(hasSpatialHint());
 		if(hasSpatialHint())
 			this.spatialHint.serialize(out);
+		out.writeSerializable(configs);
 			
+	}
+
+	public String getConfigJsonString() {
+		return configJsonString;
+	}
+
+	public void setConfigJsonString(String configJsonString) {
+		this.configJsonString = configJsonString;
+	}
+
+	public FilesystemConfig getConfigs() {
+		return configs;
+	}
+
+	public void setConfigs(FilesystemConfig configs) {
+		this.configs = configs;
 	}
 }

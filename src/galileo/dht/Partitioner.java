@@ -38,7 +38,7 @@ public abstract class Partitioner<T> {
 
 	protected StorageNode storageNode;
 	protected NetworkInfo network;
-	public static final int SPATIAL_PRECISION = 11;
+	public static int SPATIAL_PRECISION = 11;
 	public Partitioner(StorageNode storageNode, NetworkInfo network) {
 		this.storageNode = storageNode;
 		this.network = network;
