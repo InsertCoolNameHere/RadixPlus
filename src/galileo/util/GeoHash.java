@@ -52,6 +52,7 @@ import org.json.JSONObject;
 
 import galileo.dataset.Coordinates;
 import galileo.dataset.Point;
+import galileo.dataset.Point2D;
 import galileo.dataset.SpatialRange;
 import galileo.dht.hash.TemporalHash;
 import geo.main.java.com.github.davidmoten.geo.GeoHashUtils;
@@ -87,12 +88,12 @@ public class GeoHash {
 	
 	
 	public static void main(String arg[]) {
-		
-		locateCellInGrid("9x", "9xstk");
+		System.out.println("hello".startsWith(""));
+		//locateCellInGrid("9x", "9xstk",1);
 		
 	}
 	
-	public static void locateCellInGrid(String baseHash, String cellHash) {
+	public static Point2D locateCellInGrid(String baseHash, String cellHash, int dir) {
 		
 		// X - ROW NUM
 		// Y - COLUMN NUM
@@ -140,11 +141,32 @@ public class GeoHash {
 			blen++;
 		}
 		
-		System.out.println(x+" "+y);
 		
-		System.out.println(xMax+" "+yMax);
-			
+		//System.out.println(x+" "+y);
 		
+		//System.out.println(xMax+" "+yMax);
+		
+		Point2D p = new Point2D(x, y);
+		
+		// FOR THE FOLLOWING ZONES
+		// NW Zone1
+		if(dir == 1) {
+			p = new Point2D(xMax-x, yMax-y);
+		}
+		// NE Zone2
+		else if(dir == 2) {
+			p = new Point2D(xMax-x, y);
+		}
+		// SE Zone3
+		else if(dir == 3) {
+			p = new Point2D(x, y);
+		}
+		// NW Zone4
+		else if(dir == 4) {
+			p = new Point2D(x, yMax-y);
+		}
+		
+		return p;
 	}
 	
 	
