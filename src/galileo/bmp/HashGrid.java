@@ -96,6 +96,9 @@ public class HashGrid{
 	private String zone3;
 	private String zone4;
 	
+	private int xNorth = 0;
+	private int yWest = 0;
+	
 	// HIGHLAT,LOWLAT,HIGHLON,LOWLON
 	private double[] spatialBounds = new double[4];
 	
@@ -110,6 +113,9 @@ public class HashGrid{
 			Point2D intercepts1 = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
 			Point2D intercepts2 = GeoHash.locateCellInGrid(zone1, bottomRightHash, 1);
 			
+			xNorth = intercepts1.getX();
+			yWest = intercepts1.getY();
+					
 			width = intercepts1.getY()-intercepts2.getY()+1;
 			height = intercepts1.getX()-intercepts2.getX()+1;
 			
@@ -120,6 +126,9 @@ public class HashGrid{
 		else if(zone3.isEmpty() && zone4.isEmpty()) {
 			Point2D intercepts1 = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
 			Point2D intercepts2 = GeoHash.locateCellInGrid(zone2, bottomRightHash, 2);
+			
+			xNorth = intercepts1.getX();
+			yWest = intercepts1.getY();
 			
 			width = intercepts1.getY()+intercepts2.getY();
 			height = intercepts1.getX()-intercepts2.getX()+1;
@@ -136,6 +145,9 @@ public class HashGrid{
 			width = intercepts1.getY()-intercepts2.getY()+1;
 			height = intercepts1.getX()+intercepts2.getX();
 			
+			xNorth = intercepts1.getX();
+			yWest = intercepts1.getY();
+			
 			orientation = "ns";
 			
 		} 
@@ -144,6 +156,9 @@ public class HashGrid{
 			
 			Point2D intercepts1 = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
 			Point2D intercepts2 = GeoHash.locateCellInGrid(zone3, bottomRightHash, 3);
+			
+			xNorth = intercepts1.getX();
+			yWest = intercepts1.getY();
 			
 			width = intercepts1.getY()+intercepts2.getY();
 			height = intercepts1.getX()+intercepts2.getX();
@@ -570,7 +585,7 @@ public class HashGrid{
 	}
 	
 	// CONVERTING AN INDEX ID TO CORRESPONDING GEOHASH
-	public String indexToGroupHash(int idx) throws HashGridException {
+	/*public String indexToGroupHash(int idx) throws HashGridException {
 		//Determine how long of a hash an index of this object represents
 		int numChars = this.precision-this.baseHash.length();
 		if (numChars > 6)
@@ -581,6 +596,50 @@ public class HashGrid{
 			idx >>= 5;
 		}
 		return (this.baseHash + geohash);
+	}*/
+	
+	
+	
+	public String indexToGroupHash(int idx) {
+		
+		int x = idx/width;
+		int y = idx%width;
+		
+		if(x <= xNorth && y<= yWest) {
+			// ZONE 1
+			int xrel = x + height - xNorth;
+			int yrel = y - 
+		} else if(x <= xNorth) {
+			// ZONE 2
+		} else if(x> xNorth && y > yWest) {
+			// ZONE3
+		} else if(x > xNorth) {
+			// ZONE 4
+		}
+		
+		if(zId == 1) {
+			
+			return ((xNorth - actX + 1)*width + (yWest - actY+1));
+		}
+		
+		else if(zId == 2) {
+			
+			return ((xNorth - actX + 1)*width + (yWest + actY));
+		}
+		
+		else if(zId == 3) {
+			
+			return ((xNorth + actX)*width + (yWest + actY));
+		}
+		
+		else {
+			
+			return ((xNorth + actX)*width + (yWest - actY+1));
+			
+		}
+		
+		
+		
 	}
 
 	public boolean addPoint(Coordinates coords) {
@@ -645,46 +704,32 @@ public class HashGrid{
 		// dir = 3 because it returns the true intercet from a NW reference point
 		Point2D posnInGrid = GeoHash.locateCellInGrid(hash, getZoneString(zId), zId);
 		
+		int actY = posnInGrid.getY();
+		int actX = posnInGrid.getX();
+		
 		if(zId == 1) {
-			int actY = posnInGrid.getY();
-			int actX = posnInGrid.getX();
 			
-			return (actX*width + actY);
+			return ((xNorth - actX + 1)*width + (yWest - actY+1));
 		}
-		// IF ONLY 2 EXISTS
+		
 		else if(zId == 2) {
 			
-			int actY = posnInGrid.getY();
-			int actX = posnInGrid.getX();
-			
-			return (actX*width + actY);
+			return ((xNorth - actX + 1)*width + (yWest + actY));
 		}
-		// IF ALL 4 EXISTS
+		
+		else if(zId == 3) {
+			
+			return ((xNorth + actX)*width + (yWest + actY));
+		}
+		
 		else {
 			
-			Point2D intercepts1 = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
-			Point2D intercepts3 = GeoHash.locateCellInGrid(zone3, bottomRightHash, 3);
-			
-			width = intercepts1.getY()+intercepts3.getY();
-			height = intercepts1.getX()+intercepts3.getX();
+			return ((xNorth + actX)*width + (yWest - actY+1));
 			
 		}
 		
-		
-		
-		
-		String subhash = hash.substring(this.baseHash.length());
-		return (int)GeoHash.hashToLong(subhash);
 	}
 	
-	private boolean matchesBase(String geohash) {
-		int zId = getZone(geohash);
-		
-		if(zId > 0)
-			return true;
-		
-		return false;
-	}
 	/**
 	 * Applies pending updates that have not yet been integrated into the
 	 * GeoavailabilityGrid instance.

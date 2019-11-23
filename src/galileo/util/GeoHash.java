@@ -88,10 +88,100 @@ public class GeoHash {
 	
 	
 	public static void main(String arg[]) {
-		System.out.println("hello".startsWith(""));
-		//locateCellInGrid("9x", "9xstk",1);
+		System.out.println(getCharShift('t', -7, -1, true));
+		//System.out.println(-13%4);
+	}
+	
+	/**
+	 * Given a geohash, find the other geohash within the same basehash that particular offset away
+	 * @author sapmitra
+	 * @param pivotGeohash
+	 * @param xoffset
+	 * @param yoffset
+	 * @return
+	 */
+	public static String getGeohashRelativeFromOffset(String pivotGeohash, int xoffset, int yoffset, int baseLength) {
+		
+		int startLength = pivotGeohash.length();
+		String substr = pivotGeohash.substring(baseLength);
+		
+		String newSubstr = "";
+		
+		List<Integer> xShifts = new ArrayList<Integer>();
+		List<Integer> yShifts = new ArrayList<Integer>();
+		
+		for(int i = 0; i < substr.length(); i++) {
+			char c = substr.charAt(i);
+			getCharShift(c, xoffset, yoffset, startLength%2==0);
+			
+			newSubstr = c1 + newSubstr;
+			startLength--;
+		}
 		
 	}
+	
+	public static int getWidth(boolean odd) {
+		if(!odd) {
+			return 8;
+		} else {
+			return 4;
+		}
+	}
+	
+	public static int getHeight(boolean odd) {
+		if(!odd) {
+			return 4;
+		} else {
+			return 8;
+		}
+	}
+	
+	// GIVEN THE LAST/A SINGLE CHARACTER, FIND THE CHARACTER THIS OFFSET REMOVED
+	// X ROW
+	// Y COLUMN
+	public static char getCharShift(char c, int xOffSet, int yOffSet, boolean odd) {
+	
+		// The position of this box in the bigger geohash box
+		int currentYIndex = 0;
+		List<Character> currList = null;
+		if(odd) {
+			currList = evenChars;
+			
+		} else {
+			currList = oddChars;
+		}
+		
+		int w = getWidth(!odd);
+		currentYIndex = currList.indexOf(c) % w;
+		
+		int newYOffset = (currentYIndex+yOffSet)%w;
+		
+		System.out.println("X Index: "+newYOffset);
+		
+		
+		
+		// The position of this box in the bigger geohash box
+		int currentXIndex = 0;
+		
+		int h = getHeight(!odd);
+		currentXIndex = currList.indexOf(c) % h;
+		
+		int newXOffset = (currentXIndex+xOffSet)%h;
+		
+		if(newXOffset < 0) {
+			newXOffset = h + newXOffset;
+		}
+		if(newYOffset < 0) {
+			newYOffset = w + newYOffset;
+		}
+		
+		
+		int index = newXOffset*w + newYOffset;
+		
+		
+		return currList.get(index);
+	}
+	
 	
 	public static Point2D locateCellInGrid(String baseHash, String cellHash, int dir) {
 		
