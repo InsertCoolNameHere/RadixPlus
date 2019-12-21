@@ -23,6 +23,9 @@ public class Point2D {
 		this.y = y;
 	}
 	
+	public String toString() {
+		return "["+x+","+y+"]";
+	}
 	
 
 }

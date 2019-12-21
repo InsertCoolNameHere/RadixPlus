@@ -80,7 +80,11 @@ public class GeoHash {
 	
 	
 	public static List<Character> evenChars = Arrays.asList('b','c','f','g','u','v','y','z','8','9','d','e','s','t','w','x','2','3','6','7','k','m','q','r','0','1','4','5','h','j','n','p');
+	public static char[][] evenMatrix = new char[][]{{'b','c','f','g','u','v','y','z'},{'8','9','d','e','s','t','w','x'},{'2','3','6','7','k','m','q','r'},{'0','1','4','5','h','j','n','p'}};
+	
 	public static List<Character> oddChars = Arrays.asList('p','r','x','z','n','q','w','y','j','m','t','v','h','k','s','u','5','7','e','g','4','6','d','f','1','3','9','c','0','2','8','b');
+	public static char[][] oddMatrix = new char[][]{{'p','r','x','z'},{'n','q','w','y'},{'j','m','t','v'},{'h','k','s','u'},{'5','7','e','g'},{'4','6','d','f'},{'1','3','9','c'},{'0','2','8','b'}};
+	
 	public static int evenWidth = 8;
 	public static int evenHeight = 4;
 	public static int oddWidth = 4;
@@ -88,102 +92,19 @@ public class GeoHash {
 	
 	
 	public static void main(String arg[]) {
-		System.out.println(getCharShift('t', -7, -1, true));
+		//System.out.println(getCharShift('t', -7, -1, true));
 		//System.out.println(-13%4);
-	}
-	
-	/**
-	 * Given a geohash, find the other geohash within the same basehash that particular offset away
-	 * @author sapmitra
-	 * @param pivotGeohash
-	 * @param xoffset
-	 * @param yoffset
-	 * @return
-	 */
-	public static String getGeohashRelativeFromOffset(String pivotGeohash, int xoffset, int yoffset, int baseLength) {
-		
-		int startLength = pivotGeohash.length();
-		String substr = pivotGeohash.substring(baseLength);
-		
-		String newSubstr = "";
-		
-		List<Integer> xShifts = new ArrayList<Integer>();
-		List<Integer> yShifts = new ArrayList<Integer>();
-		
-		for(int i = 0; i < substr.length(); i++) {
-			char c = substr.charAt(i);
-			getCharShift(c, xoffset, yoffset, startLength%2==0);
-			
-			newSubstr = c1 + newSubstr;
-			startLength--;
-		}
-		
-	}
-	
-	public static int getWidth(boolean odd) {
-		if(!odd) {
-			return 8;
-		} else {
-			return 4;
-		}
-	}
-	
-	public static int getHeight(boolean odd) {
-		if(!odd) {
-			return 4;
-		} else {
-			return 8;
-		}
-	}
-	
-	// GIVEN THE LAST/A SINGLE CHARACTER, FIND THE CHARACTER THIS OFFSET REMOVED
-	// X ROW
-	// Y COLUMN
-	public static char getCharShift(char c, int xOffSet, int yOffSet, boolean odd) {
-	
-		// The position of this box in the bigger geohash box
-		int currentYIndex = 0;
-		List<Character> currList = null;
-		if(odd) {
-			currList = evenChars;
-			
-		} else {
-			currList = oddChars;
-		}
-		
-		int w = getWidth(!odd);
-		currentYIndex = currList.indexOf(c) % w;
-		
-		int newYOffset = (currentYIndex+yOffSet)%w;
-		
-		System.out.println("X Index: "+newYOffset);
-		
-		
-		
-		// The position of this box in the bigger geohash box
-		int currentXIndex = 0;
-		
-		int h = getHeight(!odd);
-		currentXIndex = currList.indexOf(c) % h;
-		
-		int newXOffset = (currentXIndex+xOffSet)%h;
-		
-		if(newXOffset < 0) {
-			newXOffset = h + newXOffset;
-		}
-		if(newYOffset < 0) {
-			newYOffset = w + newYOffset;
-		}
-		
-		
-		int index = newXOffset*w + newYOffset;
-		
-		
-		return currList.get(index);
+		Point2D locateCellInGrid = locateCellInGrid("9", "9b", 2);
+		System.out.println(locateCellInGrid);
 	}
 	
 	
-	public static Point2D locateCellInGrid(String baseHash, String cellHash, int dir) {
+	// GIVEN A BIGGER BASEHASH, FIND THE ROW & COLUMN OF THIS GRID IN THAT CONTAINING HASH
+	// X - ROW NUM
+	// Y - COLUMN NUM
+	
+	// POINT IS RETURNED AS Y, X - SO, INSIDE POINT, Y is X axis and vice versa
+	public static Point2D locateCellInGrid(String baseHash, String gridHash, int dir) {
 		
 		// X - ROW NUM
 		// Y - COLUMN NUM
@@ -196,7 +117,7 @@ public class GeoHash {
 		int x = 1; 
 		int y = 1;
 		
-		String substr = cellHash.substring(baseHash.length(), cellHash.length());
+		String substr = gridHash.substring(baseHash.length(), gridHash.length());
 		
 		for(int i=0; i< substr.length(); i++) {
 			char c = substr.charAt(i);
@@ -212,8 +133,8 @@ public class GeoHash {
 				x = (x-1)*oddHeight + currentx;
 				y = (y-1)*oddWidth+ currenty;
 				
-				xMax = xMax*oddWidth;
-				yMax = yMax*oddHeight;
+				xMax = xMax*oddHeight;
+				yMax = yMax*oddWidth;
 			} else {
 				
 				int indx = evenChars.indexOf(c);
@@ -223,8 +144,8 @@ public class GeoHash {
 				x = (x-1)*evenHeight + currentx;
 				y = (y-1)*evenWidth+ currenty;
 				
-				xMax = xMax*evenWidth;
-				yMax = yMax*evenHeight;
+				xMax = xMax*evenHeight;
+				yMax = yMax*evenWidth;
 				
 			}
 			
@@ -232,32 +153,47 @@ public class GeoHash {
 		}
 		
 		
-		//System.out.println(x+" "+y);
-		
-		//System.out.println(xMax+" "+yMax);
-		
-		Point2D p = new Point2D(x, y);
+		Point2D p = new Point2D(y, x);
 		
 		// FOR THE FOLLOWING ZONES
 		// NW Zone1
 		if(dir == 1) {
-			p = new Point2D(xMax-x, yMax-y);
+			p = new Point2D((yMax-y+1)*-1, xMax-x+1);
 		}
 		// NE Zone2
 		else if(dir == 2) {
-			p = new Point2D(xMax-x, y);
+			p = new Point2D(y, xMax-x+1);
 		}
 		// SE Zone3
 		else if(dir == 3) {
-			p = new Point2D(x, y);
+			p = new Point2D(y,x*-1);
 		}
 		// NW Zone4
 		else if(dir == 4) {
-			p = new Point2D(x, yMax-y);
+			p = new Point2D((yMax-y+1)*-1,x*-1);
 		}
 		
 		return p;
 	}
+	
+	
+	// GIVEN A CELL COORDINATE WRT ORIGIN FIND THE ZONE
+	// x,y are wrt origin
+	public static int locateZoneFromCell(int x, int y) {
+		int zID = -1 ;
+		
+		if(x < 0 && y > 0)
+			return 1;
+		else if(x > 0 && y > 0)
+			return 2;
+		else if(x > 0 && y < 0)
+			return 3;
+		else if(x < 0 && y < 0)
+			return 4;
+		
+		return zID;
+	}
+	
 	
 	
 

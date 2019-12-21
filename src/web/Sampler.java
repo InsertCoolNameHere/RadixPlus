@@ -70,7 +70,9 @@ public class Sampler {
 		HashMap<NodeInfo, Integer> dests = new HashMap<>();
 		/*There surely must be a better way to initialize a query grid?*/
 		//HashGrid queryGrid = new HashGrid("wdw0x9", grid.getPrecision(), "wdw0x9bpbpb", "wdw0x9pbpbp");
-		HashGrid queryGrid = new HashGrid(grid.getBaseHash(), grid.getPrecision(), StorageNode.a1, StorageNode.a2);
+		//HashGrid queryGrid = new HashGrid(grid.getBaseHash(), grid.getPrecision(), StorageNode.a1, StorageNode.a2);
+		HashGrid queryGrid = new HashGrid(grid.getZonesString(), grid.getPrecision(), grid.upperLeftHash, grid.upperRightHash,
+				grid.bottomRightHash, grid.bottomLeftHash);
 		for (String line : lines){
 			
 			double lat = Double.parseDouble(line.split(",")[latIndex]);
@@ -90,7 +92,7 @@ public class Sampler {
 		/*For each index, use the partitioner to determine where it goes*/
 		
 		for (int hash : intersections) {
-			NodeInfo dest = ((SpatialHierarchyPartitioner)partitioner).locateHashVal(grid.indexToGroupHash(hash)); //The full geohash of the point intersecting hash
+			NodeInfo dest = ((SpatialHierarchyPartitioner)partitioner).locateHashVal(grid.indexToGeoHash(hash, grid.getPrecision())); //The full geohash of the point intersecting hash
 			if (!dests.containsKey(dest))
 				dests.put(dest, 1);
 			else

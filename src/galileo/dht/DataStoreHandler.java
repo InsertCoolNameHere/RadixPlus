@@ -578,7 +578,7 @@ public class DataStoreHandler {
 				String sortedPlotData = newData.toString().trim();
 				
 				// OVERWRITING PARTIAL PLOT DATA WITH FULL DATA, COMBINED FROM ALL NODES
-				logger.info("RIKI: WRITING OUT FULL PLOT DATA TO :"+localPlotData+" AT NODE: "+sn.getHostName());
+				logger.info("RIKI: WRITING OUT FULL PLOT DATA TO :"+localPlotData.getAbsolutePath()+" AT NODE: "+sn.getHostName());
 				
 				FileWriter overWriter = new FileWriter(localPlotData, false);
 				overWriter.write(sortedPlotData);

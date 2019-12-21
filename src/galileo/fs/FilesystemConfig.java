@@ -26,7 +26,9 @@ public class FilesystemConfig implements ByteSerializable{
 	private String gridFilePath = "";
 	private String baseHashForGrid;
 	private String nw;
+	private String ne;
 	private String se;
+	private String sw;
 	private int hashGridPrecision;
 	
 	private String dateFormat = "X";
@@ -44,7 +46,10 @@ public class FilesystemConfig implements ByteSerializable{
 		out.writeString(baseHashForGrid);
 		out.writeString(gridFilePath);
 		out.writeString(nw);
+		out.writeString(ne);
 		out.writeString(se);
+		out.writeString(sw);
+		
 		out.writeInt(hashGridPrecision);
 		out.writeString(allAttributes);
 		out.writeBoolean(isTimeTimestamp);
@@ -81,7 +86,10 @@ public class FilesystemConfig implements ByteSerializable{
 		this.baseHashForGrid = in.readString();
 		this.gridFilePath = in.readString();
 		this.nw = in.readString();
+		this.ne = in.readString();
 		this.se = in.readString();
+		this.sw = in.readString();
+		
 		this.hashGridPrecision = in.readInt();
 		this.allAttributes = in.readString();
 		this.isTimeTimestamp = in.readBoolean();
@@ -190,8 +198,12 @@ public class FilesystemConfig implements ByteSerializable{
 		
 		conParams.put("gridFilePath", gridFilePath);
 		conParams.put("baseHashForGrid", baseHashForGrid);
+		
 		conParams.put("nw",nw);
+		conParams.put("ne",ne);
 		conParams.put("se",se);
+		conParams.put("sw",sw);
+		
 		conParams.put("hashGridPrecision", hashGridPrecision);
 		conParams.put("isTimeTimestamp",isTimeTimestamp);
 		conParams.put("dateFormat",dateFormat);
@@ -210,8 +222,12 @@ public class FilesystemConfig implements ByteSerializable{
 		
 		this.gridFilePath = jsonObj.getString("gridFilePath");
 		this.baseHashForGrid = jsonObj.getString("baseHashForGrid");
+		
 		this.nw = jsonObj.getString("nw");
+		this.ne = jsonObj.getString("ne");
 		this.se = jsonObj.getString("se");
+		this.sw = jsonObj.getString("sw");
+		
 		this.hashGridPrecision = jsonObj.getInt("hashGridPrecision");
 		this.isTimeTimestamp = jsonObj.getBoolean("isTimeTimestamp");
 		this.dateFormat = jsonObj.getString("dateFormat");
@@ -348,6 +364,22 @@ public class FilesystemConfig implements ByteSerializable{
 
 	public void setTimeTimestamp(boolean isTimeTimestamp) {
 		this.isTimeTimestamp = isTimeTimestamp;
+	}
+
+	public String getNe() {
+		return ne;
+	}
+
+	public void setNe(String ne) {
+		this.ne = ne;
+	}
+
+	public String getSw() {
+		return sw;
+	}
+
+	public void setSw(String sw) {
+		this.sw = sw;
 	}
 	
 }

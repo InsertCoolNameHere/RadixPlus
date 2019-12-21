@@ -1187,6 +1187,7 @@ public class StorageNode implements RequestListener{
 						if("roots-arizona".equals(fsName)) {
 							// ARIZONA PLOT DATA IS ACTUALLY STORED IN THE BLOCKS
 							// WE JUST RETURN THE BLOCK PATH ALONG WITH THE METADATA ASSOSSIATED WITH IT
+							// SPLIT BECAUSE IRODS PATH IS ALSO STORED SEPARATED BY $$
 							String tokens[] = block.split("\\$\\$");
 							String summaryString = fs.getSummaryDataString(tokens[0]);
 							

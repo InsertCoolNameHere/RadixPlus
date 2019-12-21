@@ -18,6 +18,7 @@ import galileo.fs.FilesystemConfig;
 import galileo.net.NetworkDestination;
 import galileo.util.GeoHash;
 import galileo.util.Pair;
+import galileo.bmp.HashGrid;
 import galileo.comm.Connector;
 
 /**
@@ -66,12 +67,13 @@ public class prepareFS_Az {
 		fsc.setAllGeohashes(generateSmallerGeohashes);
 		
 		// BASE HASH FOR GRID
-		fsc.setBaseHashForGrid("9tbkh4");
+		fsc.setBaseHashForGrid("9tbkh4,,,");
 		// NW GEOHASH
 		fsc.setNw("9tbkh4bpbpb");
-		
+		fsc.setNe("9tbkh4zzzzz");
 		// SE GEOHASH
 		fsc.setSe("9tbkh4pbpbp");
+		fsc.setSw("9tbkh400000");
 		
 		// ALL ATTRIBUTES FOR VIZUALIZATION
 		fsc.setAllAttributes("ndvi$sonar$thermal$lidar");

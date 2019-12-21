@@ -77,6 +77,12 @@ public class HashGrid{
 	private static final Logger logger = Logger.getLogger("galileo");
 
 	private int width, height;
+	
+	
+	public String upperLeftHash="";
+	public String upperRightHash="";
+	public String bottomRightHash="";
+	public String bottomLeftHash="";
 
 	public Bitmap bmp;
 	public SortedSet<Integer> pendingUpdates;
@@ -85,87 +91,110 @@ public class HashGrid{
 	//private double xDegreesPerPixel;
 	//private double yDegreesPerPixel;
 	//private String baseHash;
-	private int maxHashValue;
+	//private int maxHashValue;
 	private int precision;
 	public HashMap<Integer, HashMap<Long, Integer>> elevenCharIntersections = new HashMap<>();
 	public HashMap<Long, HashMap<Path2D, Integer>> plotShapeToPlotID = new HashMap<>();
 	private HashMap<Integer, Pair<Integer, String>> plotIDToRepAndGenotype = new HashMap<>();
 	
-	private String zone1;
-	private String zone2;
-	private String zone3;
-	private String zone4;
+	private String zone1 = "";
+	private String zone2 = "";
+	private String zone3 = "";
+	private String zone4 = "";
 	
-	private int xNorth = 0;
-	private int yWest = 0;
+	private int yNorth = 0;
+	private int xWest = 0;
 	
 	// HIGHLAT,LOWLAT,HIGHLON,LOWLON
 	private double[] spatialBounds = new double[4];
 	
-	
-	private String orientation = "single";
-	
 	private int basePrecision = 0;
 	
+	// HERE LONGITUDE IS X-AXIS AND LATITUDE IS Y-AXIS
+	// BASEHASH HAS TO HAVE $ COMMA SEPARATED STRINGS...MAKE THEM EMPTY IF THEY DONT EXIST
+	public HashGrid(String baseGeohash, int precision, String upperLeftHash, String upperRightHash, String bottomRightHash, String bottomLeftHash) {
+		
+		this.upperLeftHash = upperLeftHash;
+		this.upperRightHash = upperRightHash;
+		this.bottomRightHash = bottomRightHash;
+		this.bottomLeftHash = bottomLeftHash;
+
+		SpatialRange topLeft = GeoHash.decodeHash(upperLeftHash);
+		SpatialRange bottomRight = GeoHash.decodeHash(bottomRightHash);
+
+		// HIGHLAT,LOWLAT,HIGHLON,LOWLON
+		spatialBounds[0] = topLeft.getUpperBoundForLatitude();
+		spatialBounds[1] = bottomRight.getLowerBoundForLatitude();
+		spatialBounds[2] = bottomRight.getUpperBoundForLongitude();
+		spatialBounds[3] = topLeft.getLowerBoundForLongitude();
+
+		// WE HAVE AT MOST 4 BASEHASHES NOW
+		String[] tokens = baseGeohash.split(",");
+
+		zone1 = tokens[0];
+		if (tokens.length > 1)
+			zone2 = tokens[1];
+		if (tokens.length > 2)
+			zone3 = tokens[2];
+		if (tokens.length > 3)
+			zone4 = tokens[3];
+		basePrecision = zone1.length();
+
+		// INITIALIZING THE FULL WIDTH AND HEIGHT OF THE HASH-GRID
+		initializeWidthHeight(upperLeftHash, upperRightHash, bottomRightHash, bottomLeftHash);
+
+		this.bmp = new Bitmap();
+
+		// PRECISION OF THE CELLS IN THE HASHGRID
+		this.precision = precision;
+
+		this.plotMapping = new ConcurrentHashMap<>();
+		this.pendingUpdates = new TreeSet<>();
+
+		if (precision <= basePrecision)
+			throw new IllegalArgumentException("Precision must be finer than the base geohash(es)");
+
+	}
+	
+	
+	
 	private void initializeWidthHeight(String upperLeftHash, String upperRightHash, String bottomRightHash, String bottomLeftHash) {
+		
+		Point2D upLeft = null;
+		Point2D botRight = null;
+		
 		// IF ONLY 1 EXISTS
 		if(zone2.isEmpty() && zone3.isEmpty() && zone4.isEmpty()) {
-			Point2D intercepts1 = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
-			Point2D intercepts2 = GeoHash.locateCellInGrid(zone1, bottomRightHash, 1);
 			
-			xNorth = intercepts1.getX();
-			yWest = intercepts1.getY();
-					
-			width = intercepts1.getY()-intercepts2.getY()+1;
-			height = intercepts1.getX()-intercepts2.getX()+1;
-			
-			orientation = "single";
-			
+			upLeft = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
+			botRight = GeoHash.locateCellInGrid(zone1, bottomRightHash, 1);
 		}
 		// IF ONLY 2 EXISTS - E/W
 		else if(zone3.isEmpty() && zone4.isEmpty()) {
-			Point2D intercepts1 = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
-			Point2D intercepts2 = GeoHash.locateCellInGrid(zone2, bottomRightHash, 2);
-			
-			xNorth = intercepts1.getX();
-			yWest = intercepts1.getY();
-			
-			width = intercepts1.getY()+intercepts2.getY();
-			height = intercepts1.getX()-intercepts2.getX()+1;
-			
-			
-			orientation = "ew";
-			
+			upLeft = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
+			botRight = GeoHash.locateCellInGrid(zone2, bottomRightHash, 2);
 		} 
 		// IF ONLY 2 EXISTS - N/S
 		else if(zone2.isEmpty() && zone4.isEmpty()) {
-			Point2D intercepts1 = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
-			Point2D intercepts2 = GeoHash.locateCellInGrid(zone2, bottomRightHash, 2);
-			
-			width = intercepts1.getY()-intercepts2.getY()+1;
-			height = intercepts1.getX()+intercepts2.getX();
-			
-			xNorth = intercepts1.getX();
-			yWest = intercepts1.getY();
-			
-			orientation = "ns";
-			
+			upLeft = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
+			botRight = GeoHash.locateCellInGrid(zone2, bottomRightHash, 2);
 		} 
 		// IF ALL 4 EXISTS
 		else {
-			
-			Point2D intercepts1 = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
-			Point2D intercepts2 = GeoHash.locateCellInGrid(zone3, bottomRightHash, 3);
-			
-			xNorth = intercepts1.getX();
-			yWest = intercepts1.getY();
-			
-			width = intercepts1.getY()+intercepts2.getY();
-			height = intercepts1.getX()+intercepts2.getX();
-			
-			orientation = "all";
-			
+			upLeft = GeoHash.locateCellInGrid(zone1, upperLeftHash, 1);
+			botRight = GeoHash.locateCellInGrid(zone3, bottomRightHash, 3);
 		}
+		
+		yNorth = java.lang.Math.abs(upLeft.getY());
+		xWest = java.lang.Math.abs(upLeft.getX());
+		
+		height = upLeft.getY()-botRight.getY();
+		if(botRight.getY() > 0)
+			height = upLeft.getY()-botRight.getY()+1;
+		width = botRight.getX()-upLeft.getX();
+		if(upLeft.getX() > 0)
+			width = botRight.getX()-upLeft.getX()+1;
+		
 		
 	}
 	
@@ -186,59 +215,20 @@ public class HashGrid{
 		
 	}
 	
-	
-	// HERE LONGITUDE IS X-AXIS AND LATITUDE IS Y-AXIS
-	
-	public HashGrid(String baseGeohash, int precision, String upperLeftHash, String upperRightHash, String bottomRightHash, String bottomLeftHash) {
+	private String getZoneBase(int zID) {
+		if(zID == 1)
+			return zone1;
+		if(zID == 2)
+			return zone2;
+		if(zID == 3)
+			return zone3;
+		if(zID == 4)
+			return zone4;
 		
-		SpatialRange topLeft = GeoHash.decodeHash(upperLeftHash);
-		SpatialRange bottomRight = GeoHash.decodeHash(bottomRightHash);
-		
-		// HIGHLAT,LOWLAT,HIGHLON,LOWLON
-		spatialBounds[0] = topLeft.getUpperBoundForLatitude();
-		spatialBounds[1] = bottomRight.getLowerBoundForLatitude();
-		spatialBounds[2] = bottomRight.getUpperBoundForLongitude();
-		spatialBounds[3] = topLeft.getLowerBoundForLongitude();
+		return null;
 		
 		
 		
-		// WE HAVE AT MOST 4 BASEHASHES NOW
-		String[] tokens = baseGeohash.split(",");
-		zone1 = tokens[0];
-		zone2 = tokens[1];
-		zone3 = tokens[2];
-		zone4 = tokens[3];
-		basePrecision = zone1.length();
-		
-		// INITIALIZING THE FULL WIDTH AND HEIGHT OF THE HASH-GRID
-		initializeWidthHeight(upperLeftHash, upperRightHash, bottomRightHash, bottomLeftHash);
-		
-		this.bmp = new Bitmap();
-		
-		
-		// PRECISION OF THE CELLS IN THE HASHGRID
-		this.precision = precision;
-		
-		this.plotMapping = new ConcurrentHashMap<>();
-		this.pendingUpdates = new TreeSet<>();
-		
-		if (precision <= basePrecision)
-			throw new IllegalArgumentException("Precision must be finer than the base geohash(es)");
-		
-		int divisor = precision - basePrecision;
-		if (divisor % 2 != 0 && divisor > 1)
-			divisor--;
-		
-		if (precision % 2 != 0) {
-			this.width = (int)Math.pow(8, precision-basePrecision)/divisor;
-			this.height = this.width/2;
-		}
-		else {
-			this.width = (int)Math.pow(8,  precision-basePrecision)/divisor;
-			this.height = this.width;
-		}
-		this.maxHashValue = this.width*this.height;
-
 	}
 	
 
@@ -354,13 +344,6 @@ public class HashGrid{
 		return coordArr;
 	}
 	
-	public int locatePoint(int index) {
-		if (this.plotMapping.get(index) != null)
-			return this.plotMapping.get(index);
-		else return -1;
-	}
-	
-	
 	// VALIDATING WHETHER WE THIS POINT FALLS WITHING THE HASHGRID AT ALL
 	public boolean validatePoint(Coordinates coords) {
 		double lat = coords.getLatitude();
@@ -374,7 +357,7 @@ public class HashGrid{
 	}
 	
 	
-	
+	// USED WHILE INSERTING DATA
 	public int locatePoint(Coordinates coords) throws BitmapException {
 		
 		if(!validatePoint(coords)) {
@@ -383,7 +366,10 @@ public class HashGrid{
 		}
 		
 		String geohash12 = GeoHash.encode(coords,  precision+1);
+		
 		String geohash11 = geohash12.substring(0, precision);
+		
+		// THIS IS THE KEY FOR THIS GEOHASH IN THE GRID
 		int elevenCharKey = geohashToIndex(geohash11);
 
 		if (plotMapping.get(elevenCharKey) != null) {
@@ -391,6 +377,7 @@ public class HashGrid{
 				return this.plotMapping.get(elevenCharKey);
 			else {
 				long twelveLong = GeoHash.hashToLong(geohash12);
+				//long twelveLong = geohashToIndex(geohash12);
 				if (elevenCharIntersections.get(elevenCharKey).containsKey(twelveLong) && !plotShapeToPlotID.containsKey(twelveLong))
 					return this.elevenCharIntersections.get(elevenCharKey).get(twelveLong);
 				else {
@@ -413,6 +400,8 @@ public class HashGrid{
 		}
 		return -1;
 	}
+	
+	// USED WHILE QUERYING/LISTING BLOCKS
 	public Set<Integer> locatePoint(String geohash) throws BitmapException {
 		if (geohash.length() != precision)
 			throw new BitmapException("Must pass 11 character geohash!");
@@ -425,6 +414,7 @@ public class HashGrid{
 			else {
 				for (char c : GeoHash.charMap) {
 					long twelveLong = GeoHash.hashToLong(geohash+c);
+					//long twelveLong = geohashToIndex(geohash+c);
 					if (elevenCharIntersections.get(elevenCharKey).containsKey(twelveLong) && !plotShapeToPlotID.containsKey(twelveLong))
 						intersectingPlots.add(this.elevenCharIntersections.get(elevenCharKey).get(twelveLong));
 					else {
@@ -479,29 +469,10 @@ public class HashGrid{
 		Coordinates SE_most = (map.get(lowestLong).getLongitude() >= map.get(secondLowestLong).getLongitude()) ? map.get(lowestLong) : map.get(secondLowestLong);		
 		return new Coordinates[] {NW_most, SE_most};
 	}
-	/**
-	 * Adds a new point to this HashGrid.
-	 *
-	 * @param coords
-	 *            The location (coordinates in lat, lon) to add.
-	 *            
-	 * @param plotID
-	 * 			  The plot identifier for the current coordinate pair
-	 *
-	 * @return true if the point could be added to grid, false otherwise (for
-	 *         example, if the point falls outside the purview of the grid)
-	 */
-	public boolean addPoint(Coordinates coords, int plotID) {
-		String geohash = GeoHash.encode(coords, this.precision);
-		try {
-			return addPoint(geohash, plotID);
-		} catch (BitmapException e) {
-			e.printStackTrace();
-			return false;
-		}
-	}
+	
 
 	// poly: polygon bounds of the current plot
+	// CALLED DURING LOADING OF SHAPEFILE
 	public boolean addPoint(String geohash, int plotID, Path2D poly) throws BitmapException {
 		// GET THE SUBSTRING AFTER BASEHASH AND CONVERT IT TO LONG
 		int elevenCharKey = geohashToIndex(geohash);
@@ -531,6 +502,7 @@ public class HashGrid{
 				twelveCharHashRect.lineTo(hashBox[3], hashBox[0]);
 				twelveCharHashRect.lineTo(hashBox[2], hashBox[0]);
 				twelveCharHashRect.closePath();
+				
 				long twelveLong = GeoHash.hashToLong(twelveChar);
 				
 				// THE PLOT POLYGON FULLY CONTAINS THE 12 CHAR
@@ -556,7 +528,7 @@ public class HashGrid{
 			}
 			
 		}
-		if (elevenCharKey > this.maxHashValue) {
+		if (elevenCharKey < 0) {
 			logger.warning("This point falls outside the purview of this bitmap");
 			return false;
 		}
@@ -568,21 +540,6 @@ public class HashGrid{
 		return true;
 	}
 	
-	public boolean addPoint(String geohash, int plotID) throws BitmapException {
-		int index = geohashToIndex(geohash);
-		if (!this.plotMapping.containsKey(index))
-			this.plotMapping.put(index, plotID);
-		if (index > this.maxHashValue) {
-			logger.warning("This point falls outside the purview of this bitmap");
-			return false;
-		}
-		if (this.bmp.set(index) == false) {
-			/* Could not set the bits now; add to pending updates */
-			pendingUpdates.add(index);
-			return false;
-		}
-		return true;
-	}
 	
 	// CONVERTING AN INDEX ID TO CORRESPONDING GEOHASH
 	/*public String indexToGroupHash(int idx) throws HashGridException {
@@ -598,50 +555,6 @@ public class HashGrid{
 		return (this.baseHash + geohash);
 	}*/
 	
-	
-	
-	public String indexToGroupHash(int idx) {
-		
-		int x = idx/width;
-		int y = idx%width;
-		
-		if(x <= xNorth && y<= yWest) {
-			// ZONE 1
-			int xrel = x + height - xNorth;
-			int yrel = y - 
-		} else if(x <= xNorth) {
-			// ZONE 2
-		} else if(x> xNorth && y > yWest) {
-			// ZONE3
-		} else if(x > xNorth) {
-			// ZONE 4
-		}
-		
-		if(zId == 1) {
-			
-			return ((xNorth - actX + 1)*width + (yWest - actY+1));
-		}
-		
-		else if(zId == 2) {
-			
-			return ((xNorth - actX + 1)*width + (yWest + actY));
-		}
-		
-		else if(zId == 3) {
-			
-			return ((xNorth + actX)*width + (yWest + actY));
-		}
-		
-		else {
-			
-			return ((xNorth + actX)*width + (yWest - actY+1));
-			
-		}
-		
-		
-		
-	}
-
 	public boolean addPoint(Coordinates coords) {
 		String geohash = GeoHash.encode(coords, this.precision);
 		//logger.info("RIKI: CURRENT POINT: "+coords+" "+geohash);
@@ -655,7 +568,7 @@ public class HashGrid{
 
 	public boolean addPoint(String geohash) throws BitmapException {
 		int index = geohashToIndex(geohash);
-		if (index > this.maxHashValue) {
+		if (index < 0) {
 			logger.warning("This point falls outside the purview of this bitmap");
 			return false;
 		}
@@ -673,23 +586,9 @@ public class HashGrid{
 		return (int)GeoHash.hashToLong(subhash);
 	}*/
 	
-	public String getZoneString(int zoneId) {
-		
-		if(zoneId == 1)
-			return zone1;
-		else if(zoneId == 2)
-			return zone2;
-		else if(zoneId == 3)
-			return zone3;
-		else if(zoneId == 4)
-			return zone4;
-		else
-			return zone1;
-		
-	}
-	
 	/**
 	 * GIVEN A GEOHASH CELL FIND ITS INDEX IN THE GRID
+	 * THIS INDEX IS CALCULATED AS AN OFFSET FROM THE NORTHWEST BOUNDS
 	 * @author sapmitra
 	 * @param hash
 	 * @return
@@ -698,37 +597,167 @@ public class HashGrid{
 	public int geohashToIndex(String hash) throws BitmapException {
 		
 		int zId = getZone(hash);
+		
 		if (zId <= 0)
 			throw new BitmapException("Point does not fall within basehash(es) of bitmap");
 		
-		// dir = 3 because it returns the true intercet from a NW reference point
-		Point2D posnInGrid = GeoHash.locateCellInGrid(hash, getZoneString(zId), zId);
+		// dir = 3 because it returns the true intercept from a NW reference point
+		Point2D posnWrtOrigin = GeoHash.locateCellInGrid(getZoneBase(zId), hash, zId);
 		
-		int actY = posnInGrid.getY();
-		int actX = posnInGrid.getX();
-		
-		if(zId == 1) {
-			
-			return ((xNorth - actX + 1)*width + (yWest - actY+1));
+		// THE OFFSETS OF THIS POINT WRT THE NORTH-WEST BOUNDARY
+		// THE FOLLOWING ARE ALWAYS >= 0
+		// MAKE SURE THAT WE DON'T TAG THE ADJAVENT CELL DURING CONVERSION
+		int offY = yNorth-posnWrtOrigin.getY();
+		// ZONE 1 or 2
+		if(posnWrtOrigin.getY() > 0) {
+			offY = yNorth-posnWrtOrigin.getY()+1;
 		}
 		
-		else if(zId == 2) {
-			
-			return ((xNorth - actX + 1)*width + (yWest + actY));
+		int offX = xWest+posnWrtOrigin.getX();
+		// ZONE 1 or 4
+		if(posnWrtOrigin.getX() < 0) {
+			offX = xWest+posnWrtOrigin.getX() + 1;
 		}
 		
-		else if(zId == 3) {
-			
-			return ((xNorth + actX)*width + (yWest + actY));
-		}
+		// FOR THE ZONE, VALIDATE IF IT LIES WITHIN BOUNDS
+		if(offY < 0 || offX < 0 || offY > height || offX > width)
+			return -1;
 		
-		else {
-			
-			return ((xNorth + actX)*width + (yWest - actY+1));
-			
-		}
+		int index = (offY-1)*width+offX;
 		
+		return index;
 	}
+	
+	// GIVEN A GRID INDEX AND THE PRECISION IT REPRESENTS, FIND THE CORRESPONDING GEOHASH
+	public String indexToGeoHash(int idx, int precision) {
+		
+		int offY = (idx/width)+1;
+		int offX = idx%width;
+		
+		// GETTING COORDINATES WRT ORIGIN
+		int x_origin = offX - xWest;
+		
+		if(offX - xWest - 1 < 0)
+			x_origin = offX - xWest - 1;
+		
+		int y_origin = yNorth - offY;
+		if(yNorth - offY + 1 > 0) {
+			y_origin = yNorth - offY + 1;
+		}
+		
+		// USING THE COORDINATES, FIND THE GEOHASH
+		int zone = GeoHash.locateZoneFromCell(x_origin, y_origin);
+		String zoneBase = getZoneBase(zone);
+		
+		String gh = locateGeohashInGrid(zoneBase, x_origin, y_origin, zone, precision);
+		
+		return gh;
+	}
+	
+	
+	// GIVEN OFFSETS FROM THE SE CORNER, FIND THE GEOHASH
+	public String locateGeohashInGrid(String baseHash, int x, int y, int zone, int precision) {
+		
+		String ret = baseHash;
+		x = Math.abs(x);
+		y = Math.abs(y);
+		
+		// FIND THE GEOHASH CLOSEST TO ORIGIN FOR THIS BASEHASH IN TERMS OF THE PRECISION
+		// USE THE MAXWIDTH TO FIND THE ROW & COLUMN IN THE MATRIX
+		int maxWidth = 1;
+		int maxHeight = 1;
+		
+		for(int i = baseHash.length(); i < precision; i++) {
+			if(i%2 != 0) {
+				maxWidth *= GeoHash.oddWidth;
+				maxHeight *= GeoHash.oddHeight;
+			} else {
+				maxWidth *= GeoHash.evenWidth;
+				maxHeight *= GeoHash.evenHeight;
+			}
+		}
+		
+		
+		for(int i = baseHash.length()+1; i <= precision; i++) {
+			// FINDING HOW MANY i SIZED GEOHASHES LIE BEFORE THIS OFFSET
+			
+			if(i%2 == 0) {
+				
+				// LOOKING FOR NUMBER OF EVEN SIZED GEOHASH BLOCKS
+				maxWidth/=GeoHash.oddWidth;
+				maxHeight/=GeoHash.oddHeight;
+				
+				int xblocks = x;
+				int yblocks = y;
+				
+				if(i!=precision) {
+					
+					xblocks = (int)Math.ceil((double)x / (double)maxWidth);
+					//x = x % maxWidth;
+					x = x - (maxWidth*(xblocks-1));
+					
+					
+					yblocks = (int)Math.ceil((double)y / (double)maxHeight);
+					//y = y % maxHeight;
+					y = y - (maxHeight*(yblocks-1));
+				}
+				
+				
+				if(zone == 1 || zone == 4) {
+					xblocks = GeoHash.oddWidth - xblocks+1;
+				}
+				if(zone == 1 || zone == 2) {
+					yblocks = GeoHash.oddHeight - yblocks+1;
+				}
+				
+				
+				// GEOHASH USING THE MATRIX
+				char cx = GeoHash.oddMatrix[yblocks-1][xblocks-1];
+				
+				ret+=cx;
+				//System.out.println(x+"---"+cx);
+				
+				
+			} else {
+				// LOOKING FOR NUMBER OF ODD SIZED GEOHASH BLOCKS
+				maxWidth/=GeoHash.evenWidth;
+				maxHeight/=GeoHash.evenHeight;
+				
+				int xblocks = x;
+				int yblocks = y;
+				
+				if(i!= precision) {
+					xblocks = (int)Math.ceil((double)x / (double)maxWidth);
+					//x = x % maxWidth;
+					x = x - (maxWidth*(xblocks-1));
+					
+					
+					yblocks = (int)Math.ceil((double)y / (double)maxHeight);
+					//y = y % maxHeight;
+					y = y - (maxHeight*(yblocks-1));
+				}
+				
+				
+				if(zone == 1 || zone == 4) {
+					xblocks = GeoHash.evenWidth - xblocks+1;
+				}
+				if(zone == 1 || zone == 2) {
+					yblocks = GeoHash.evenHeight - yblocks+1;
+				}
+				
+				
+				// GEOHASH USING THE MATRIX
+				char cx = GeoHash.evenMatrix[yblocks-1][xblocks-1];
+				
+				ret+=cx;
+				//System.out.println(x+"---"+cx);
+			}
+		}
+		return ret;
+	}
+	
+	
+	
 	
 	/**
 	 * Applies pending updates that have not yet been integrated into the
@@ -761,11 +790,7 @@ public class HashGrid{
 	 * @return true if the supplied {@link GeoavailabilityQuery} intersects with
 	 *         the data in the geoavailability grid.
 	 */
-	public boolean intersects(GeoavailabilityQuery query) throws BitmapException {
-		applyUpdates();
-		Bitmap queryBitmap = QueryTransform.queryToGridBitmap(query, this);
-		return this.bmp.intersects(queryBitmap);
-	}
+	
 	
 	/**
 	 * Converts a coordinate pair (defined with latitude, longitude in decimal
@@ -776,13 +801,12 @@ public class HashGrid{
 	 *
 	 * @return Corresponding x, y location in the grid.
 	 */
-	public Point<Integer> coordinatesToXY(Coordinates coords) {
+	/*public Point<Integer> coordinatesToXY(Coordinates coords) {
 		String geohash = GeoHash.encode(coords, this.precision);
 		int index = (int)(GeoHash.hashToLong(geohash));
 		
-		/*Convert a 1D index to a 2D location on grid*/
 		return indexToXY(index);
-	}
+	}*/
 	
 	/**
 	 * Converts a bitmap index to X, Y coordinates in the grid.
@@ -802,7 +826,7 @@ public class HashGrid{
 	 *
 	 * @return An array of bitmap indices that matched the query.
 	 */
-	public int[] query(GeoavailabilityQuery query) throws BitmapException {
+	/*public int[] query(GeoavailabilityQuery query) throws BitmapException {
 		applyUpdates();
 		Bitmap queryBitmap = QueryTransform.queryToGridBitmap(query, this);
 		if(logger.isLoggable(Level.FINEST)){
@@ -837,7 +861,7 @@ public class HashGrid{
 			}
 		}
 		return this.bmp.and(queryBitmap).toArray();
-	}
+	}*/
 	
 	public int[] query(Bitmap queryBitmap){
 		
@@ -856,9 +880,9 @@ public class HashGrid{
 		return bmp;
 	}
 
-	public String getBaseHash() {
+	/*public String getBaseHash() {
 		return this.baseHash;
-	}
+	}*/
 
 	/**
 	 * Retrieves the width of this GeoavailabilityGrid, in grid cells.
@@ -874,8 +898,30 @@ public class HashGrid{
 		return height;
 	}
 	
+	public static void main(String arg[]) {
+		
+		String s = "9,,,,";
+		String[] tokens = s.split(",");
+		System.out.println();
+	}
+	public static void main1(String arg[]) throws BitmapException {
+		
+		int precision = 7;
+		HashGrid h = new HashGrid("94,96,93,91", precision, "94bpbpb", "96zzzzz", "93pbpbp", "9100000");
+		//HashGrid h = new HashGrid("96,", precision, "96bpbpb", "96zzzzz", "96pbpbp", "9600000");
+		//HashGrid h = new HashGrid("9", 3, "97b", "9gz", "9bp", "920");
+		
+		int k = h.geohashToIndex("94bmmm4");
+		System.out.println("ID:"+k);
+		
+		String indexToGeoHash = h.indexToGeoHash(k, precision);
+		
+		System.out.println("HASH:"+indexToGeoHash);
+	}
 	
-	
+	public String getZonesString() {
+		return zone1+","+zone2+","+zone3+","+zone4;
+	}
 	
 	
 }

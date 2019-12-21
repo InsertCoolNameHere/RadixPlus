@@ -250,8 +250,8 @@ public class GeospatialFileSystem extends FileSystem {
 		}
 		
 		try {
-			
-			globalGrid = new HashGrid(configs.getBaseHashForGrid(), configs.getHashGridPrecision(), configs.getNw(), configs.getSe());
+			globalGrid = new HashGrid(configs.getBaseHashForGrid(), configs.getHashGridPrecision(), configs.getNw(), configs.getNe(), 
+					configs.getSe(), configs.getSw());
 			// THIS READS THE PLOTS.JSON FILE AND MARKS THE PLOTS ON THE HASHGRID
 			//globalGrid.initGrid(pathToGridFile+File.separator+gridFiles[0].getName());
 			globalGrid.initGrid(pathToGridFile);
@@ -968,7 +968,8 @@ public class GeospatialFileSystem extends FileSystem {
 			//HashGrid queryGrid = new HashGrid("wdw0x9", master.getGlobalGrid().getPrecision(), "wdw0x9bpbpb", "wdw0x9pbpbp");
 			
 			//HashGrid queryGrid = new HashGrid(StorageNode.baseHash, master.getGlobalGrid().getPrecision(), StorageNode.a1, StorageNode.a2);
-			HashGrid queryGrid = new HashGrid(configs.getBaseHashForGrid(), getGlobalGrid().getPrecision(), configs.getNw(), configs.getSe());
+			HashGrid queryGrid = new HashGrid(configs.getBaseHashForGrid(), getGlobalGrid().getPrecision(), configs.getNw(), configs.getNe(), 
+					configs.getSe(), configs.getSw());
 			
 			//logger.info("RIKI: HERE X1");
 			for (String ghash : hashLocations)
@@ -992,10 +993,8 @@ public class GeospatialFileSystem extends FileSystem {
 			
 			
 			for (Integer i : intersections)
-				try {
-					hashLocations.add(getGlobalGrid().indexToGroupHash(i));
-				} catch (HashGridException e1) {
-				}
+				hashLocations.add(getGlobalGrid().indexToGeoHash(i, configs.getHashGridPrecision()));
+				
 			
 			//logger.info("RIKI: INTERSECTING GEOHASHES FOR GRID: "+hashLocations);
 			//Once coverage is computed, query hashgrid to determine which plots are contained in polygon
