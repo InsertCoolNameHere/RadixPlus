@@ -318,9 +318,10 @@ public class HierarchicalRadixGraph<T> {
 
     /**
      * Adds a new {@link Path} to the Hierarchical Graph.
+     * Adds the hash value to the leaf of the path.
      * @param hashValue the checksum of the leaf for this path
      */
-    public void addPath(RIGPath<Feature, T> path, long hashValue) throws FeatureTypeMismatchException, GraphException {
+    public void addPath(RIGPath<Feature, T> path) throws FeatureTypeMismatchException, GraphException {
     	
         if (path.size() == 0) {
             throw new GraphException("Attempted to add empty path!");

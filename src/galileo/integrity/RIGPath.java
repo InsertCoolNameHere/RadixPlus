@@ -42,8 +42,10 @@ import java.util.regex.Pattern;
  */
 public class RIGPath<L extends Comparable<L>, V>
 implements Iterable<RIGVertex<L, V>> {
+	
     protected List<RIGVertex<L, V>> vertices = new ArrayList<>();
     protected Set<V> payload = new HashSet<V>();
+    protected long merkleHash = -1;
     /**
      * Create a Path with a number of vertices pre-populated.
      */

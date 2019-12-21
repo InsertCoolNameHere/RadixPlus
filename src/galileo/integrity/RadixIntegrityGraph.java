@@ -10,8 +10,6 @@ import galileo.dataset.Metadata;
 import galileo.dataset.feature.Feature;
 import galileo.dataset.feature.FeatureSet;
 import galileo.dataset.feature.FeatureType;
-import galileo.graph.FeaturePath;
-import galileo.graph.HierarchicalGraph;
 import galileo.graph.Path;
 import galileo.query.Query;
 import galileo.util.Math;
@@ -66,8 +64,14 @@ public class RadixIntegrityGraph {
 							featureset.put(new Feature(pair.a, features[i]));
 					}
 					metadata.setAttributes(featureset);
-					RIGPath<Feature, String> featurePath = createPath("/nopath", metadata);
-					hrig.addPath(featurePath, hashValue);
+					
+					// CREATING A PATH OUT OF THE STRING ARRAY
+					// THE ATTRIBUTES ARE ADDED AS VERTICES,
+					// THE PATH AND HASHVALUE GET ADDED AS HASH AND PAYLOAD ATTRIBUTE TO THE PATH
+					RIGFeaturePath<String> featurePath = createPath(irodsPath, metadata, hashValue);
+					
+					// APPENDING THE PATH TO THE TREE
+					hrig.addPath(featurePath);
 				} catch (Exception e) {
 					logger.warning(e.getMessage());
 				}
@@ -135,8 +139,8 @@ public class RadixIntegrityGraph {
 	}
 	
 	
-	protected RIGPath<Feature, String> createPath(String physicalPath, Metadata meta) {
-		RIGPath<Feature, String> path = new RIGPath<Feature, String>(physicalPath, meta.getAttributes().toArray());
+	protected RIGFeaturePath<String> createPath(String physicalPath, Metadata meta, long hashValue) {
+		RIGFeaturePath<String> path = new RIGFeaturePath<String>(physicalPath, hashValue, meta.getAttributes().toArray());
 		return path;
 	}
 	

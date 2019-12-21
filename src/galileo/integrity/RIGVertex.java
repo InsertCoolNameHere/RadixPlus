@@ -176,6 +176,19 @@ public class RIGVertex<L extends Comparable<L>, V> {
     public void addValues(Collection<V> values) {
         this.values.addAll(values);
     }
+    
+    public void setHashValue(long val) {
+        this.hashValue = longToByteArray(val);
+    }
+    
+    /**
+	 * Big-endian conversion
+	 */
+	public static byte[] longToByteArray(long value) {
+		return new byte[] { (byte) (value >> 56), (byte) (value >> 48), (byte) (value >> 40), (byte) (value >> 32),
+				(byte) (value >> 24), (byte) (value >> 16), (byte) (value >> 8), (byte) value };
+	}
+    
 
     /**
      * Retrieves all {@link RIGPath} instances represented by the children of this
