@@ -46,7 +46,8 @@ public class RIGVertex<L extends Comparable<L>, V> {
     protected Set<V> values = new HashSet<V>();
     protected TreeMap<L, RIGVertex<L, V>> edges = new TreeMap<>();
     
-    public byte[] hashValue; 
+    public boolean isHashSet = false;
+    public long hashValue; 
 
     public RIGVertex() { }
 
@@ -55,7 +56,7 @@ public class RIGVertex<L extends Comparable<L>, V> {
     }
     
     public boolean hasHash() {
-    	if(hashValue == null)
+    	if(isHashSet)
     		return false;
     	
     	return true;
@@ -178,7 +179,8 @@ public class RIGVertex<L extends Comparable<L>, V> {
     }
     
     public void setHashValue(long val) {
-        this.hashValue = longToByteArray(val);
+    	this.isHashSet = true;
+        this.hashValue = val;
     }
     
     /**

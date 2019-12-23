@@ -1,9 +1,13 @@
 package galileo.integrity;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import galileo.dataset.Metadata;
@@ -18,6 +22,9 @@ import galileo.util.Pair;
 // EACH FS HAS ITS OWN R.I.G.
 public class RadixIntegrityGraph {
 
+	// THE SEPARATOR FOR IRODS PATHS
+	public static String rigPathSeparator = "/";
+	
 	public List<String[]> pendingPaths;
 	
 	// A GRAPH THAT CAN SERVE BOTH AS A METADATA GRAPH AS WELL AS AN INTEGRITY GRAPH
@@ -26,6 +33,8 @@ public class RadixIntegrityGraph {
 	private static final Logger logger = Logger.getLogger("galileo");
 	
 	public synchronized void updatePathsIntoRIG() {
+		// A MAP TO WHICH NODES AT EACH LEVEL NEEDS UPDATE
+		List<Set<String>> levelToLabelMap = new ArrayList<Set<String>>();
 		
 		if (this.pendingPaths.size() > 0) {
 			Iterator<String[]> pathIterator = this.pendingPaths.iterator();
@@ -68,7 +77,7 @@ public class RadixIntegrityGraph {
 					// CREATING A PATH OUT OF THE STRING ARRAY
 					// THE ATTRIBUTES ARE ADDED AS VERTICES,
 					// THE PATH AND HASHVALUE GET ADDED AS HASH AND PAYLOAD ATTRIBUTE TO THE PATH
-					RIGFeaturePath<String> featurePath = createPath(irodsPath, metadata, hashValue);
+					RIGFeaturePath<String> featurePath = createRIGPath(irodsPath, metadata, hashValue);
 					
 					// APPENDING THE PATH TO THE TREE
 					hrig.addPath(featurePath);
@@ -139,8 +148,27 @@ public class RadixIntegrityGraph {
 	}
 	
 	
-	protected RIGFeaturePath<String> createPath(String physicalPath, Metadata meta, long hashValue) {
+	protected RIGFeaturePath<String> createRIGPath(String physicalPath, Metadata meta, long hashValue) {
 		RIGFeaturePath<String> path = new RIGFeaturePath<String>(physicalPath, hashValue, meta.getAttributes().toArray());
+		
+		String pathDup = physicalPath;
+		
+		// FINDING THE PAYLOAD FOR EACH NODE
+		for(int i = path.getVertices().size()-1; i >=0; i--) {
+			RIGVertex<Feature, String> rv = path.getVertices().get(i);
+			
+			// ADDING THE PAYLOAD TO THIS VERTEX
+			rv.addValue(pathDup);
+			
+			// ADDING THE HASHVALUE TO THE LEAFT VERTEX ONLY
+			if(i == path.getVertices().size()-1) {
+				rv.setHashValue(hashValue);
+			}
+			
+			int indx = pathDup.lastIndexOf(rigPathSeparator);
+			pathDup = pathDup.substring(0,indx-1);
+		}
+		//path.get(index)
 		return path;
 	}
 	

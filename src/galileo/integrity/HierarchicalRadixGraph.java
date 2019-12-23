@@ -334,7 +334,8 @@ public class HierarchicalRadixGraph<T> {
         }
 
         /* Place the path payload (traversal result) at the end of this path. */
-        path.get(path.size() - 1).addValues(path.getPayload());
+        // ALREADY HANDLED IN THE PATH CREATION
+        //path.get(path.size() - 1).addValues(path.getPayload());
 
         root.addPath(path.iterator());
     }
