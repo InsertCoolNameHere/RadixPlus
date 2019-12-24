@@ -43,6 +43,7 @@ import java.util.TreeMap;
 public class RIGVertex<L extends Comparable<L>, V> {
 
     protected L label;
+    public String path = null;
     protected Set<V> values = new HashSet<V>();
     protected TreeMap<L, RIGVertex<L, V>> edges = new TreeMap<>();
     

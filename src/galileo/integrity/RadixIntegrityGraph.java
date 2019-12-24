@@ -8,6 +8,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Logger;
 
 import galileo.dataset.Metadata;
@@ -33,6 +34,7 @@ public class RadixIntegrityGraph {
 	private static final Logger logger = Logger.getLogger("galileo");
 	
 	public synchronized void updatePathsIntoRIG() {
+		
 		// A MAP TO WHICH NODES AT EACH LEVEL NEEDS UPDATE
 		List<Set<String>> levelToLabelMap = new ArrayList<Set<String>>();
 		
@@ -77,10 +79,10 @@ public class RadixIntegrityGraph {
 					// CREATING A PATH OUT OF THE STRING ARRAY
 					// THE ATTRIBUTES ARE ADDED AS VERTICES,
 					// THE PATH AND HASHVALUE GET ADDED AS HASH AND PAYLOAD ATTRIBUTE TO THE PATH
-					RIGFeaturePath<String> featurePath = createRIGPath(irodsPath, metadata, hashValue);
+					RIGFeaturePath<String> featurePath = createRIGPath(irodsPath, metadata, hashValue, levelToLabelMap);
 					
 					// APPENDING THE PATH TO THE TREE
-					hrig.addPath(featurePath);
+					hrig.addPathToRIG(featurePath);
 				} catch (Exception e) {
 					logger.warning(e.getMessage());
 				}
@@ -147,22 +149,41 @@ public class RadixIntegrityGraph {
 	
 	}
 	
-	
-	protected RIGFeaturePath<String> createRIGPath(String physicalPath, Metadata meta, long hashValue) {
+	/**
+	 * POPULATE THE FEATURE PATH WITH FEATURE LABELS
+	 * SET PAYLOAD AT EACH NODE IS INSIDE "VALUES", WHICH REPRESENTS THE DIRECTORY PATH IT REPRESENTS
+	 * SET HASH VALUES AT THE LEAVES ONLY
+	 * MARK THE LEVEL_TO_LABEL MAP FOR FUTURE UPDATES
+	 * @author sapmitra
+	 * @param physicalPath
+	 * @param meta
+	 * @param hashValue
+	 * @param levelToLabelMap
+	 * @return
+	 */
+	protected RIGFeaturePath<String> createRIGPath(String physicalPath, Metadata meta, long hashValue, List<Set<String>> levelToLabelMap) {
+		
 		RIGFeaturePath<String> path = new RIGFeaturePath<String>(physicalPath, hashValue, meta.getAttributes().toArray());
 		
 		String pathDup = physicalPath;
 		
-		// FINDING THE PAYLOAD FOR EACH NODE
+		// FINDING AND SETTING THE PAYLOAD FOR EACH NODE
 		for(int i = path.getVertices().size()-1; i >=0; i--) {
 			RIGVertex<Feature, String> rv = path.getVertices().get(i);
 			
-			// ADDING THE PAYLOAD TO THIS VERTEX
-			rv.addValue(pathDup);
+			// ADDING THE DIRECTORY/FILE PATH TO THIS VERTEX
+			rv.path = pathDup;
 			
-			// ADDING THE HASHVALUE TO THE LEAFT VERTEX ONLY
+			// Marking the nodes that have been changes in the tree
+			if(levelToLabelMap.get(i) == null) {
+				levelToLabelMap.add(i, new TreeSet<String>());
+			}
+			levelToLabelMap.get(i).add(pathDup);
+			
+			// ADDING THE HASHVALUE TO THE LEAF VERTEX ONLY
 			if(i == path.getVertices().size()-1) {
 				rv.setHashValue(hashValue);
+				
 			}
 			
 			int indx = pathDup.lastIndexOf(rigPathSeparator);

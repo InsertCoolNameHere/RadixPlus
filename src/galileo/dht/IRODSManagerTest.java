@@ -86,7 +86,7 @@ public class IRODSManagerTest {
 		tst.writeRemoteFile(f);*/
 		
 		try {
-			tst.readRemoteFile();
+			tst.readRemoteDirectory();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			System.out.println("CAUGHT: "+e);
@@ -112,7 +112,6 @@ public class IRODSManagerTest {
 	}
 	
 	
-
 	public void readRemoteFile() throws JargonException, IOException {
 
 		TransferOptions opts = new TransferOptions();
@@ -158,6 +157,67 @@ public class IRODSManagerTest {
 		String remoteContents = new String(Files.readAllBytes(Paths.get(temp.getAbsolutePath())));
 		
 		System.out.println("Hi");
+		/*logger.info("****************\nReceived " + remoteContents.split(System.lineSeparator()).length
+				+ " lines from IRODS for plot " + fileName.substring(0, fileName.lastIndexOf(File.separator))
+				+ "\n****************");
+		fileWriter.write(System.lineSeparator() + remoteContents);
+		fileWriter.close();
+		logger.info("\n*********\nAfter combining remote data and local, wrote a new file of length "
+				+ new String(Files.readAllBytes(Paths.get(localFile.getAbsolutePath()))).split("\n").length);
+		File temp = File.createTempFile("plot", ".gblock");
+		if (!temp.exists())
+			temp.createNewFile();
+		PrintWriter tempWriter = new PrintWriter(temp);
+		tempWriter.write(toWrite);
+		tempWriter.close();
+		dataTransferOperationsAO.putOperation(localFile, remoteDir, tscl, tcb);
+		temp.delete();*/
+	}
+	
+	
+	public void readRemoteDirectory() throws JargonException, IOException {
+
+		TransferOptions opts = new TransferOptions();
+		//opts.setComputeAndVerifyChecksumAfterTransfer(true);
+		opts.setIntraFileStatusCallbacks(true);
+		TransferControlBlock tcb = DefaultTransferControlBlock.instance();
+		tcb.setTransferOptions(opts);
+		
+		TransferStatusCallbackListener tscl = new TransferStatusCallbackListener() {
+			@Override
+			public FileStatusCallbackResponse statusCallback(TransferStatus transferStatus) {
+				return FileStatusCallbackResponse.CONTINUE;
+			}
+
+			@Override
+			public void overallStatusCallback(TransferStatus transferStatus) {
+			}
+
+			@Override
+			public CallbackResponse transferAsksWhetherToForceOperation(String irodsAbsolutePath,
+					boolean isCollection) {
+				return CallbackResponse.YES_FOR_ALL;
+			}
+		};
+		
+		File temp = new File("/s/chopin/b/grad/sapmitra/Documents/radix/sampleData");
+		if (!temp.exists())
+			temp.createNewFile();
+		//IRODSFile remoteFile = fileFactory.instanceIRODSFile("plots/");
+		IRODSFile toFetch = fileFactory.instanceIRODSFile("/iplant/home/radix_subterra/plots/990");
+		while (!toFetch.exists()) {
+			try {
+				System.out.println("NOT EXISTS");
+				Thread.sleep(100);
+			} catch (InterruptedException e1) {
+				e1.printStackTrace();
+			}
+		}
+		dataTransferOperationsAO.getOperation(toFetch, temp, tscl, tcb);
+		System.out.println("FINISHED FETCHING");
+		//String remoteContents = new String(Files.readAllBytes(Paths.get(temp.getAbsolutePath())));
+		
+		//System.out.println("Hi" + remoteContents);
 		/*logger.info("****************\nReceived " + remoteContents.split(System.lineSeparator()).length
 				+ " lines from IRODS for plot " + fileName.substring(0, fileName.lastIndexOf(File.separator))
 				+ "\n****************");

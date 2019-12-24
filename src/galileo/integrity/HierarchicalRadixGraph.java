@@ -321,17 +321,12 @@ public class HierarchicalRadixGraph<T> {
      * Adds the hash value to the leaf of the path.
      * @param hashValue the checksum of the leaf for this path
      */
-    public void addPath(RIGPath<Feature, T> path) throws FeatureTypeMismatchException, GraphException {
+    public void addPathToRIG(RIGPath<Feature, T> path) throws FeatureTypeMismatchException, GraphException {
     	
         if (path.size() == 0) {
             throw new GraphException("Attempted to add empty path!");
         }
 
-
-        /* Ensure the path contains a payload. */
-        if (path.getPayload().size() == 0) {
-            throw new GraphException("Attempted to add Path with no payload!");
-        }
 
         /* Place the path payload (traversal result) at the end of this path. */
         // ALREADY HANDLED IN THE PATH CREATION
