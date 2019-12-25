@@ -23,6 +23,10 @@ import galileo.util.Pair;
 // EACH FS HAS ITS OWN R.I.G.
 public class RadixIntegrityGraph {
 
+
+	// LIST OF PRE-DEFINED GRAPH'S NODENAMES AND TYPES
+	private List<Pair<String, FeatureType>> featureList;
+	
 	// THE SEPARATOR FOR IRODS PATHS
 	public static String rigPathSeparator = "/";
 	
@@ -83,6 +87,8 @@ public class RadixIntegrityGraph {
 					
 					// APPENDING THE PATH TO THE TREE
 					hrig.addPathToRIG(featurePath);
+					
+					hrig.updateHashes(levelToLabelMap);
 				} catch (Exception e) {
 					logger.warning(e.getMessage());
 				}
@@ -95,10 +101,6 @@ public class RadixIntegrityGraph {
 		}
 	}
 	
-	
-	
-	// LIST OF PRE-DEFINED GRAPH'S NODENAMES AND TYPES
-	private List<Pair<String, FeatureType>> featureList;
 	
 	public void addToPendingPath(String[] pathTokens) {
 		if(pendingPaths == null) {
@@ -133,6 +135,7 @@ public class RadixIntegrityGraph {
 		
 
 	}
+	
 	
 	public List<String[]> evaluateQuery(Query query) {
 		List<String[]> featurePaths = new ArrayList<String[]>();

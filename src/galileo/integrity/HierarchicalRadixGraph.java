@@ -24,6 +24,8 @@ software, even if advised of the possibility of such damage.
 */
 package galileo.integrity;
 
+import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -429,12 +431,64 @@ public class HierarchicalRadixGraph<T> {
         return paths;
     }
 
-    public Vertex<Feature, T> getRoot() {
+    public RIGVertex<Feature, T> getRoot() {
         return root;
     }
-
+    
     @Override
     public String toString() {
         return root.toString();
+    }
+	
+	public void constructMerkleHashTree(int height, List<Set<String>> levelToLabelMap) {
+		
+		for(int i = height-1; i > 0; i--) {
+			List<String> currentLevel = new ArrayList<String>();
+			levelTraverser(root, i, currentLevel);
+			System.out.println(currentLevel);
+			System.out.println("==================================");
+		}
+		
+	}
+	
+	public void levelTraverser(RIGVertex<Feature, T> node, int lvl, List<String> currentLevel) {
+        
+        if(node == null)
+            return;
+        if(lvl == 1) {
+            // THIS IS THE LEVEL WE ARE LOOKING FOR
+            if(node != null) {
+                currentLevel.add(node.path);
+                
+                // GET ALL CHILDREN AND THEIR SIGNATURES
+                // COMBINE THE SIGNATURES AND CREATE A MERKLE TREE
+                
+                List<byte[]>  childrenSignatures = new ArrayList<byte[]>();
+                List<String>  childrenPaths = new ArrayList<String>();
+                for(GalileoMTNode n : node.children) {
+                	childrenSignatures.add(n.root_signature);
+                	
+                	childrenPaths.add(n.path);
+                }
+                
+                MerkleTree mt = new MerkleTree(childrenSignatures, childrenPaths);
+                String chl = childrenPaths.get(0);
+                int indx = chl.lastIndexOf(File.separator);
+                String par = chl.substring(0,indx-1);
+                
+                node.merkleTree = mt;
+                node.path = par;
+                node.root_signature = mt.getRoot().sig;
+            }
+            
+            
+            return;
+        } else {
+        	for(GalileoMTNode m : node.children) {
+        		levelTraverser(m, lvl-1, currentLevel);
+            
+        	}
+        }
+        
     }
 }
