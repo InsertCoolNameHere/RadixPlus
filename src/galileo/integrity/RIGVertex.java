@@ -47,8 +47,9 @@ public class RIGVertex<L extends Comparable<L>, V> {
     protected Set<V> values = new HashSet<V>();
     protected TreeMap<L, RIGVertex<L, V>> edges = new TreeMap<>();
     
-    public boolean isHashSet = false;
     public long hashValue; 
+    
+    public MerkleTree mt = null;
 
     public RIGVertex() { }
 
@@ -57,7 +58,7 @@ public class RIGVertex<L extends Comparable<L>, V> {
     }
     
     public boolean hasHash() {
-    	if(isHashSet)
+    	if(mt == null)
     		return false;
     	
     	return true;
@@ -180,7 +181,6 @@ public class RIGVertex<L extends Comparable<L>, V> {
     }
     
     public void setHashValue(long val) {
-    	this.isHashSet = true;
         this.hashValue = val;
     }
     
@@ -311,4 +311,9 @@ public class RIGVertex<L extends Comparable<L>, V> {
     public String toString() {
         return toString(0);
     }
+
+	public void setMerkleTree(MerkleTree mt2) {
+		// TODO Auto-generated method stub
+		mt = mt2;
+	}
 }

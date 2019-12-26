@@ -440,52 +440,60 @@ public class HierarchicalRadixGraph<T> {
         return root.toString();
     }
 	
-	public void constructMerkleHashTree(int height, List<Set<String>> levelToLabelMap) {
+	public void updateHashes(int height, List<Set<String>> levelToLabelMap) {
 		
+		// LEVEL TRAVERSAL, STARTING FROM BOTTOM TO TOP
 		for(int i = height-1; i > 0; i--) {
 			List<String> currentLevel = new ArrayList<String>();
-			levelTraverser(root, i, currentLevel);
+			levelTraverser(root, i, levelToLabelMap);
 			System.out.println(currentLevel);
 			System.out.println("==================================");
 		}
 		
 	}
 	
-	public void levelTraverser(RIGVertex<Feature, T> node, int lvl, List<String> currentLevel) {
+	public void levelTraverser(RIGVertex<Feature, T> node, int lvl, List<Set<String>> levelToLabelMap) {
         
         if(node == null)
             return;
+        
+        
+        // MAKE SURE THIS RIG VERTEX ACTUALLY NEEDS RECOMPUTATION
+        if(levelToLabelMap.get(lvl) != null && levelToLabelMap.get(lvl).contains(node.path)) {
+        	
+        } else {
+        	return;
+        }
+        
+        
         if(lvl == 1) {
             // THIS IS THE LEVEL WE ARE LOOKING FOR
             if(node != null) {
-                currentLevel.add(node.path);
                 
                 // GET ALL CHILDREN AND THEIR SIGNATURES
                 // COMBINE THE SIGNATURES AND CREATE A MERKLE TREE
                 
-                List<byte[]>  childrenSignatures = new ArrayList<byte[]>();
+                List<Long>  childrenSignatures = new ArrayList<Long>();
                 List<String>  childrenPaths = new ArrayList<String>();
-                for(GalileoMTNode n : node.children) {
-                	childrenSignatures.add(n.root_signature);
+                
+                for(RIGVertex<Feature, T> n : node.edges.values()) {
+                	childrenSignatures.add(n.hashValue);
                 	
                 	childrenPaths.add(n.path);
                 }
                 
                 MerkleTree mt = new MerkleTree(childrenSignatures, childrenPaths);
-                String chl = childrenPaths.get(0);
-                int indx = chl.lastIndexOf(File.separator);
-                String par = chl.substring(0,indx-1);
                 
-                node.merkleTree = mt;
-                node.path = par;
-                node.root_signature = mt.getRoot().sig;
+                node.mt = mt;
+                node.hashValue = mt.getRoot().getHash();
+                
             }
             
             
             return;
         } else {
-        	for(GalileoMTNode m : node.children) {
-        		levelTraverser(m, lvl-1, currentLevel);
+        	for(RIGVertex<Feature, T> m : node.edges.values()) {
+        		levelTraverser(m, lvl-1, levelToLabelMap);
             
         	}
         }

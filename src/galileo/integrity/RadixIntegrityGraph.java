@@ -42,8 +42,12 @@ public class RadixIntegrityGraph {
 		// A MAP TO WHICH NODES AT EACH LEVEL NEEDS UPDATE
 		List<Set<String>> levelToLabelMap = new ArrayList<Set<String>>();
 		
+		int height = 0;
+		
 		if (this.pendingPaths.size() > 0) {
 			Iterator<String[]> pathIterator = this.pendingPaths.iterator();
+			
+			int cnt = 0;
 			
 			while (pathIterator.hasNext()) {
 				
@@ -51,6 +55,11 @@ public class RadixIntegrityGraph {
 				String pl = features[features.length - 1];
 				
 				String tokens[] = pl.split("\\$\\$");
+				
+				if(cnt == 0) {
+					height = features.length+1;
+					cnt++;
+				}
 				
 				// EXTRACTING THE CHECKSUM VALUE
 				long hashValue = Long.valueOf(tokens[2]);
@@ -88,15 +97,15 @@ public class RadixIntegrityGraph {
 					// APPENDING THE PATH TO THE TREE
 					hrig.addPathToRIG(featurePath);
 					
-					hrig.updateHashes(levelToLabelMap);
 				} catch (Exception e) {
 					logger.warning(e.getMessage());
 				}
 				pathIterator.remove();
 				
-				
-				// ALSO ADD THIS PATH TO THE R.I.G.
 			}
+			
+			// ALSO UPDATE THIS PATH ON THE R.I.G.
+			hrig.updateHashes(height, levelToLabelMap);
 			
 		}
 	}
@@ -185,8 +194,14 @@ public class RadixIntegrityGraph {
 			
 			// ADDING THE HASHVALUE TO THE LEAF VERTEX ONLY
 			if(i == path.getVertices().size()-1) {
-				rv.setHashValue(hashValue);
 				
+				List<Long> sign = new ArrayList<Long>();
+				sign.add(hashValue);
+				List<String> ps = new ArrayList<String>();
+				ps.add(pathDup);
+				
+				MerkleTree mt = new MerkleTree(sign, ps);
+				rv.setMerkleTree(mt);
 			}
 			
 			int indx = pathDup.lastIndexOf(rigPathSeparator);
