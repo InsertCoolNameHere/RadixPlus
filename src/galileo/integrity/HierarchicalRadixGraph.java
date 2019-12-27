@@ -111,18 +111,16 @@ public class HierarchicalRadixGraph<T> {
         }
     }
 
-    public List<Path<Feature, T>> evaluateQuery(Query query) {
-        List<Path<Feature, T>> paths = null;
+    public List<RIGPath<Feature, T>> evaluateQuery(Query query) {
+    	
+        List<RIGPath<Feature, T>> paths = null;
         for (Operation operation : query.getOperations()) {
-            HierarchicalQueryTracker<T> tracker = new HierarchicalQueryTracker<>(root, features.size());
+            RIGQueryTracker<T> tracker = new RIGQueryTracker<>(root, features.size());
             evaluateOperation(operation, tracker);
-            List<Path<Feature, T>> opResult = null;
-//            try{
-//            	opResult = tracker.getQueryResults(query);
-            	opResult = tracker.getQueryResults();
-//            } catch (GraphException e){
-//            	logger.severe(e.getMessage());
-//            }
+            
+            List<RIGPath<Feature, T>> opResult = null;
+
+            opResult = tracker.getQueryResults();
             if (paths == null) {
                 paths = opResult;
             } else {
@@ -130,7 +128,7 @@ public class HierarchicalRadixGraph<T> {
             }
         }
 
-        for (Path<Feature, T> path : paths) {
+        for (RIGPath<Feature, T> path : paths) {
             removeNullFeatures(path);
         }
         return paths;
@@ -149,34 +147,24 @@ public class HierarchicalRadixGraph<T> {
     	return features;
     }
 
-    public List<Path<Feature, T>> evaluateQuery(
-            Query query, PayloadFilter<T> filter) {
 
-        List<Path<Feature, T>> paths = evaluateQuery(query);
-        Iterator<Path<Feature, T>> it = paths.iterator();
-        while (it.hasNext()) {
-            Path<Feature, T> path = it.next();
-            
-            boolean empty = applyPayloadFilter(path, filter);
-            if (empty) {
-                it.remove();
-            }
-        }
-
-        return paths;
-    }
-
-    public void evaluateOperation(Operation operation, HierarchicalQueryTracker<T> tracker) {
+    public void evaluateOperation(Operation operation, RIGQueryTracker<T> tracker) {
     	synchronized(features) {
 	        for (String feature : features) {
+	        	
+	        	// INCREASING THE LEVEL
 	            tracker.nextLevel();
+	            
+	            // EACH LEVEL HOLDS THE PATHS COVERED AT THAT ITERATION FOR THAT FEATURE LEVEL. THE PATHS FROM THE 
+	            // LAST LEVEL ARE EXPANDED ON AND THE NEXT SET OF RESULTS ARE SET ON THE NEXT LEVEL
 	            /* Find all expressions related to the current Feature (operand) */
 	            List<Expression> expressions = operation.getOperand(feature);
 	            if (expressions == null) {
 	                /* No expressions deal with the current feature.  Traverse all
 	                 * neighbors. */
-	                for (Path<Feature, T> path : tracker.getCurrentResults()) {
-	                    Vertex<Feature, T> vertex = path.getTail();
+	                for (RIGPath<Feature, T> path : tracker.getCurrentResults()) {
+	                	// THE LEAFT VERTEX OF THE CURRENT PATH
+	                    RIGVertex<Feature, T> vertex = path.getTail();
 	                    
 	                    tracker.addResults(path, vertex.getAllNeighbors());
 	                }
@@ -184,9 +172,9 @@ public class HierarchicalRadixGraph<T> {
 	                /* Note that we are evaluating an Expression at this level */
 	                tracker.markEvaluated();
 	
-	                for (Path<Feature, T> path : tracker.getCurrentResults()) {
-	                    Vertex<Feature, T> vertex = path.getTail();
-	                    Collection<Vertex<Feature, T>> resultCollection
+	                for (RIGPath<Feature, T> path : tracker.getCurrentResults()) {
+	                    RIGVertex<Feature, T> vertex = path.getTail();
+	                    Collection<RIGVertex<Feature, T>> resultCollection
 	                        = evaluateExpressions(expressions, vertex);
 	                    
 	                    tracker.addResults(path, resultCollection);
@@ -206,19 +194,19 @@ public class HierarchicalRadixGraph<T> {
      *
      * @return a collection of matching vertices.
      */
-    private Collection<Vertex<Feature, T>> evaluateExpressions(
-            List<Expression> expressions, Vertex<Feature, T> vertex) {
+    private Collection<RIGVertex<Feature, T>> evaluateExpressions(
+            List<Expression> expressions, RIGVertex<Feature, T> vertex) {
 
-        Set<Vertex<Feature, T>> resultSet = null;
+        Set<RIGVertex<Feature, T>> resultSet = null;
 
         for (Expression expression : expressions) {
-            Set<Vertex<Feature, T>> evalSet = new HashSet<>();
+            Set<RIGVertex<Feature, T>> evalSet = new HashSet<>();
             Feature value = expression.getValue();
 
             switch (expression.getOperator()) {
                 case EQUAL: {
                     /* Select a particular neighboring vertex */
-                    Vertex<Feature, T> equalTo = vertex.getNeighbor(value);
+                    RIGVertex<Feature, T> equalTo = vertex.getNeighbor(value);
 
                     if (equalTo == null) {
                         /* There was no Vertex that matched the value given. */
@@ -239,7 +227,7 @@ public class HierarchicalRadixGraph<T> {
                 }
 
                 case LESS: {
-                    NavigableMap<Feature, Vertex<Feature, T>> neighbors
+                    NavigableMap<Feature, RIGVertex<Feature, T>> neighbors
                         = vertex.getNeighborsLessThan(value, false);
                     removeWildcard(neighbors);
                     evalSet.addAll(neighbors.values());
@@ -248,7 +236,7 @@ public class HierarchicalRadixGraph<T> {
                 }
 
                 case LESSEQUAL: {
-                    NavigableMap<Feature, Vertex<Feature, T>> neighbors
+                    NavigableMap<Feature, RIGVertex<Feature, T>> neighbors
                         = vertex.getNeighborsLessThan(value, true);
                     removeWildcard(neighbors);
                     evalSet.addAll(neighbors.values());
@@ -307,7 +295,7 @@ public class HierarchicalRadixGraph<T> {
      * no elements or the first element is not a NULL FeatureType, then no
      * modifications are made to the map.
      */
-    private void removeWildcard(NavigableMap<Feature, Vertex<Feature, T>> map) {
+    private void removeWildcard(NavigableMap<Feature, RIGVertex<Feature, T>> map) {
         if (map.size() <= 0) {
             return;
         }
@@ -343,8 +331,8 @@ public class HierarchicalRadixGraph<T> {
      *
      * @param path Path to remove null Features from.
      */
-    private void removeNullFeatures(Path<Feature, T> path) {
-        Iterator<Vertex<Feature, T>> it = path.iterator();
+    private void removeNullFeatures(RIGPath<Feature, T> path) {
+        Iterator<RIGVertex<Feature, T>> it = path.iterator();
         while (it.hasNext()) {
             Feature f = it.next().getLabel();
             if (f == null || f.getType() == FeatureType.NULL) {
@@ -423,9 +411,9 @@ public class HierarchicalRadixGraph<T> {
         return hierarchy;
     }
 
-    public List<Path<Feature, T>> getAllPaths() {
-        List<Path<Feature, T>> paths = root.descendantPaths();
-        for (Path<Feature, T> path : paths) {
+    public List<RIGPath<Feature, T>> getAllPaths() {
+        List<RIGPath<Feature, T>> paths = root.descendantPaths();
+        for (RIGPath<Feature, T> path : paths) {
             removeNullFeatures(path);
         }
         return paths;

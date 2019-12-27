@@ -41,6 +41,7 @@ import java.util.List;
  */
 public class Query implements ByteSerializable {
 
+	// EXPRESSIONS ARE AND .... OPERATIONS ARE OR
     private List<Operation> operations = new ArrayList<>();
     private String time;
     public Query() { }
