@@ -121,6 +121,7 @@ public class HierarchicalRadixGraph<T> {
             List<RIGPath<Feature, T>> opResult = null;
 
             opResult = tracker.getQueryResults();
+            
             if (paths == null) {
                 paths = opResult;
             } else {

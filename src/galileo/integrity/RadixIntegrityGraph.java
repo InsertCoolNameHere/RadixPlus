@@ -148,7 +148,9 @@ public class RadixIntegrityGraph {
 	
 	public List<String[]> evaluateQuery(Query query) {
 		List<String[]> featurePaths = new ArrayList<String[]>();
+		
 		List<Path<Feature, String>> evaluatedPaths = hrig.evaluateQuery(query);
+		
 		for (Path<Feature, String> path : evaluatedPaths) {
 			String[] featureValues = new String[path.size()];
 			int index = 0;

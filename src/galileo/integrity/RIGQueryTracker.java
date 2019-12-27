@@ -100,7 +100,7 @@ public class RIGQueryTracker<T> {
         farthestEvaluatedExpression = getCurrentLevel();
     }
     
-    // ENSURING THAT ACTUAL BLOCKPATHS ARE RETURNED, INSTEAD OF DIRECTORY PATHS
+    
     public List<RIGPath<Feature, T>> getQueryResults() {
         List<RIGPath<Feature, T>> paths = new ArrayList<>();
         for (int i = farthestEvaluatedExpression; i < results.size(); ++i) {
