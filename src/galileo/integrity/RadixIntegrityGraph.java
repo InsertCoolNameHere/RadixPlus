@@ -149,6 +149,7 @@ public class RadixIntegrityGraph {
 	public List<String[]> evaluateQuery(Query query) {
 		List<String[]> featurePaths = new ArrayList<String[]>();
 		
+		// RETURN DIRECTORY/FILEPATHS....IF IT IS A DIRECTORY PATH, CALCULATE THE HASH OF THE DIRECTORY AFTER DOWNLOAD
 		List<Path<Feature, String>> evaluatedPaths = hrig.evaluateQuery(query);
 		
 		for (Path<Feature, String> path : evaluatedPaths) {
