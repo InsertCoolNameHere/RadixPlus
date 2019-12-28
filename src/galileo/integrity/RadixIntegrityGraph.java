@@ -15,6 +15,8 @@ import galileo.dataset.Metadata;
 import galileo.dataset.feature.Feature;
 import galileo.dataset.feature.FeatureSet;
 import galileo.dataset.feature.FeatureType;
+import galileo.fs.GeospatialFileSystem;
+import galileo.graph.MetadataGraph;
 import galileo.graph.Path;
 import galileo.query.Query;
 import galileo.util.Math;
@@ -22,8 +24,10 @@ import galileo.util.Pair;
 
 // EACH FS HAS ITS OWN R.I.G.
 public class RadixIntegrityGraph {
-
-
+	
+	public RadixIntegrityGraph() {}
+	
+	
 	// LIST OF PRE-DEFINED GRAPH'S NODENAMES AND TYPES
 	private List<Pair<String, FeatureType>> featureList;
 	
@@ -37,6 +41,32 @@ public class RadixIntegrityGraph {
 	
 	private static final Logger logger = Logger.getLogger("galileo");
 	
+	
+	// INITIALIZING THE HIERARCHICAL GRAPH WITH PRESET FEATURES
+	public RadixIntegrityGraph(String featureList) {
+		
+		List<String> featureNames = null;
+		if (featureList != null) {
+			this.featureList = new ArrayList<>();
+			featureNames = new ArrayList<String>();
+			
+			for (String nameType : featureList.split(",")) {
+				String[] pair = nameType.split(":");
+				featureNames.add(pair[0]);
+				this.featureList.add(new Pair<String, FeatureType>(pair[0], FeatureType.fromInt(Integer.parseInt(pair[1]))));
+			}
+			/* Cannot modify featurelist anymore */
+			this.featureList = Collections.unmodifiableList(this.featureList);
+			
+			
+		}
+		
+		hrig = new HierarchicalRadixGraph<>(this.featureList);
+		
+	}
+	
+	
+	// ADD RECORDS OF INSERTED IRODS FILES INTO THE R.I.G.
 	public synchronized void updatePathsIntoRIG() {
 		
 		// A MAP TO WHICH NODES AT EACH LEVEL NEEDS UPDATE
@@ -119,22 +149,6 @@ public class RadixIntegrityGraph {
 		pendingPaths.add(pathTokens);
 	}
 	
-	public RadixIntegrityGraph() {}
-	
-	
-	public RadixIntegrityGraph(String featureList) {
-		
-		if (featureList != null) {
-			this.featureList = new ArrayList<>();
-			for (String nameType : featureList.split(",")) {
-				String[] pair = nameType.split(":");
-				
-				this.featureList.add(new Pair<String, FeatureType>(pair[0], FeatureType.fromInt(Integer.parseInt(pair[1]))));
-			}
-			/* Cannot modify featurelist anymore */
-			this.featureList = Collections.unmodifiableList(this.featureList);
-		}
-	}
 	
 	public synchronized void clearPendingPaths() {
 		pendingPaths.clear();

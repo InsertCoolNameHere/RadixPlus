@@ -110,13 +110,28 @@ public class HierarchicalRadixGraph<T> {
             getOrder(feature.a, feature.b);
         }
     }
+    
+    public HierarchicalRadixGraph(List<Pair<String, FeatureType>> hierarchy) {
+    	if(hierarchy == null)
+    		return;
+        for (Pair<String, FeatureType> feature : hierarchy) {
+            getOrder(feature.a, feature.b);
+        }
+    }
 
     public List<RIGPath<Feature, T>> evaluateQuery(Query query) {
     	
         List<RIGPath<Feature, T>> paths = null;
+        
+        // OPERATIONS ARE OR IN A QUERY
+        // EXECUTING OPERATIONS INDIVIDUALLY
         for (Operation operation : query.getOperations()) {
+        	
+        	String lastFeature = getLastFeature(operation);
             RIGQueryTracker<T> tracker = new RIGQueryTracker<>(root, features.size());
-            evaluateOperation(operation, tracker);
+            
+            // ACTUAL QUERY EVALUATION
+            evaluateOperation(operation, tracker, lastFeature);
             
             List<RIGPath<Feature, T>> opResult = null;
 
@@ -135,7 +150,24 @@ public class HierarchicalRadixGraph<T> {
         return paths;
     }
     
-    public JSONArray getFeaturesJSON(){
+    /**
+	 * @param operation
+	 * @return
+	 * RETURNS THE LAST FEATURE IN THE HIERARCHY IN THIS OPERATION
+	 */
+	private String getLastFeature(Operation operation) {
+		String lastOne = null;
+		
+		for (String feature : features) {
+			if(operation.getOperand(feature) != null) {
+				lastOne = feature;
+			}
+		}
+				
+		return lastOne;
+	}
+
+	public JSONArray getFeaturesJSON(){
     	Set<Entry<String, Level>> entries = levels.entrySet();
     	JSONArray features = new JSONArray();
     	for(Entry<String, Level> e : entries){
@@ -148,8 +180,8 @@ public class HierarchicalRadixGraph<T> {
     	return features;
     }
 
-
-    public void evaluateOperation(Operation operation, RIGQueryTracker<T> tracker) {
+    // OPERATIONS ARE OR
+    public void evaluateOperation(Operation operation, RIGQueryTracker<T> tracker, String lastFeature) {
     	synchronized(features) {
 	        for (String feature : features) {
 	        	
@@ -180,6 +212,11 @@ public class HierarchicalRadixGraph<T> {
 	                    
 	                    tracker.addResults(path, resultCollection);
 	                }
+	            }
+	            
+	            
+	            if(feature.equals(lastFeature)) {
+	            	// TIME TO RETURN WHOLE DIRECTORY, CALCULATE BLOCKS INSIDE AS WELL.
 	            }
 	        }
     	}
