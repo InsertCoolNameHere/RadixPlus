@@ -80,7 +80,7 @@ public class HierarchicalRadixGraph<T> {
      * the original insertion order (although in practice, it probably does).
      */
 //    private Queue<String> features = new LinkedList<>();
-    private  Queue<String> features = new ConcurrentLinkedQueue<>();
+    private Queue<String> features = new ConcurrentLinkedQueue<>();
 
     /**
      * Tracks information about each level in the graph hierarchy.
@@ -128,6 +128,7 @@ public class HierarchicalRadixGraph<T> {
         for (Operation operation : query.getOperations()) {
         	
         	String lastFeature = getLastFeature(operation);
+        	
             RIGQueryTracker<T> tracker = new RIGQueryTracker<>(root, features.size());
             
             // ACTUAL QUERY EVALUATION
@@ -144,9 +145,9 @@ public class HierarchicalRadixGraph<T> {
             }
         }
 
-        for (RIGPath<Feature, T> path : paths) {
+        /*for (RIGPath<Feature, T> path : paths) {
             removeNullFeatures(path);
-        }
+        }*/
         return paths;
     }
     
@@ -188,6 +189,12 @@ public class HierarchicalRadixGraph<T> {
 	        	// INCREASING THE LEVEL
 	            tracker.nextLevel();
 	            
+	            boolean lastTime = false;
+	            if(feature.equals(lastFeature) && tracker.getCurrentLevel() < tracker.results.size()) {
+	            	// TIME TO RETURN WHOLE DIRECTORY INSTEAD OF BLOCKS
+	            	lastTime = true;
+	            }
+	            
 	            // EACH LEVEL HOLDS THE PATHS COVERED AT THAT ITERATION FOR THAT FEATURE LEVEL. THE PATHS FROM THE 
 	            // LAST LEVEL ARE EXPANDED ON AND THE NEXT SET OF RESULTS ARE SET ON THE NEXT LEVEL
 	            /* Find all expressions related to the current Feature (operand) */
@@ -210,14 +217,13 @@ public class HierarchicalRadixGraph<T> {
 	                    Collection<RIGVertex<Feature, T>> resultCollection
 	                        = evaluateExpressions(expressions, vertex);
 	                    
-	                    tracker.addResults(path, resultCollection);
+	                    if(!lastTime)
+	                    	tracker.addResults(path, resultCollection);
+	                    else 
+	                    	tracker.addLastResults(path, resultCollection);
 	                }
 	            }
 	            
-	            
-	            if(feature.equals(lastFeature)) {
-	            	// TIME TO RETURN WHOLE DIRECTORY, CALCULATE BLOCKS INSIDE AS WELL.
-	            }
 	        }
     	}
     }

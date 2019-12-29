@@ -28,6 +28,8 @@ public class RadixIntegrityGraph {
 	public RadixIntegrityGraph() {}
 	
 	
+	private String rootPath = "";
+	
 	// LIST OF PRE-DEFINED GRAPH'S NODENAMES AND TYPES
 	private List<Pair<String, FeatureType>> featureList;
 	
@@ -43,10 +45,13 @@ public class RadixIntegrityGraph {
 	
 	
 	// INITIALIZING THE HIERARCHICAL GRAPH WITH PRESET FEATURES
-	public RadixIntegrityGraph(String featureList) {
+	public RadixIntegrityGraph(String featureList, String rootPath, String fsName) {
+		
+		this.rootPath = rootPath+rigPathSeparator+fsName+rigPathSeparator;
 		
 		List<String> featureNames = null;
 		if (featureList != null) {
+			
 			this.featureList = new ArrayList<>();
 			featureNames = new ArrayList<String>();
 			
@@ -57,7 +62,6 @@ public class RadixIntegrityGraph {
 			}
 			/* Cannot modify featurelist anymore */
 			this.featureList = Collections.unmodifiableList(this.featureList);
-			
 			
 		}
 		
@@ -159,14 +163,19 @@ public class RadixIntegrityGraph {
 
 	}
 	
-	
+	/**
+	 * QUERY BLOCKS/DIRECTORIES IN IRODS THAT MATCH
+	 * @author sapmitra
+	 * @param query
+	 * @return
+	 */
 	public List<String[]> evaluateQuery(Query query) {
 		List<String[]> featurePaths = new ArrayList<String[]>();
 		
 		// RETURN DIRECTORY/FILEPATHS....IF IT IS A DIRECTORY PATH, CALCULATE THE HASH OF THE DIRECTORY AFTER DOWNLOAD
-		List<Path<Feature, String>> evaluatedPaths = hrig.evaluateQuery(query);
+		List<RIGPath<Feature, String>> evaluatedPaths = hrig.evaluateQuery(query);
 		
-		for (Path<Feature, String> path : evaluatedPaths) {
+		for (RIGPath<Feature, String> path : evaluatedPaths) {
 			String[] featureValues = new String[path.size()];
 			int index = 0;
 			for (Feature feature : path.getLabels())
@@ -219,6 +228,9 @@ public class RadixIntegrityGraph {
 				
 				MerkleTree mt = new MerkleTree(sign, ps);
 				rv.setMerkleTree(mt);
+				
+				rv.path = pathDup;
+				rv.hashValue = hashValue;
 			}
 			
 			int indx = pathDup.lastIndexOf(rigPathSeparator);

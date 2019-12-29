@@ -76,6 +76,25 @@ public class RIGQueryTracker<T> {
             this.results.get(getCurrentLevel()).add(path);
         }
     }
+    
+    
+    public void addLastResults(RIGPath<Feature, T> previousPath, Collection<RIGVertex<Feature, T>> results) {
+
+        for (RIGVertex<Feature, T> vertex : results) {
+            RIGPath<Feature, T> path = new RIGPath<>(previousPath);
+            path.add(vertex);
+
+            /* Copy over the payload */
+            if (vertex.getValues().size() > 0) {
+            	String payload = vertex.path+"$$"+vertex.hashValue;
+            	HashSet<T> hs = new HashSet<>();
+            	hs.add((T)payload);
+            	
+                path.setPayload(hs);
+            }
+            this.results.get(getCurrentLevel()).add(path);
+        }
+    }
 
     public void nextLevel() {
         ++currentLevel;
