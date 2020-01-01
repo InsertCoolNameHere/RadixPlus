@@ -60,6 +60,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.logging.Logger;
+import java.util.zip.Adler32;
 
 import org.irods.jargon.core.exception.JargonException;
 import org.locationtech.spatial4j.io.GeohashUtils;
@@ -586,10 +587,16 @@ public class DataStoreHandler {
 				
 				// RIKI ACTUAL WRITING TO IRODS
 				logger.info("RIKI: COULD HAVE SENT TO IRODS, BUT DIDNT");
+				
 				//Send off to IRODS
 				/*if (msg.getPlotID() < 100)
 					subterra.writeRemoteFile(localPlotData, this);
 				*/
+				
+				Adler32 a1 = new Adler32();
+				a1.update(sortedPlotData.getBytes());
+				fs.addIRODSPendingPath(localPlotData.getAbsolutePath(), a1.getValue());
+				
 				
 			} catch (IOException | InterruptedException e) {
 				logger.severe("Error on broadcasting a data request for plot " + msg.getPlotID() + " " + e);

@@ -85,7 +85,7 @@ public class RIGQueryTracker<T> {
             path.add(vertex);
 
             /* Copy over the payload */
-            if (vertex.getValues().size() > 0) {
+            if (vertex.mt != null) {
             	String payload = vertex.path+"$$"+vertex.hashValue;
             	HashSet<T> hs = new HashSet<>();
             	hs.add((T)payload);

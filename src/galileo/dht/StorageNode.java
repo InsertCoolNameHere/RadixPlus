@@ -66,6 +66,8 @@ import galileo.bmp.GeoavailabilityQuery;
 import galileo.bmp.HashGrid;
 import galileo.bmp.HashGridException;
 import galileo.bmp.QueryTransform;
+import galileo.comm.BlockQueryRequest;
+import galileo.comm.BlockQueryResponse;
 import galileo.comm.BlockRequest;
 import galileo.comm.BlockResponse;
 import galileo.comm.FilesystemAction;
@@ -163,6 +165,8 @@ public class StorageNode implements RequestListener{
 	private ConcurrentHashMap<String, QueryTracker> queryTrackers = new ConcurrentHashMap<>();
 	private Listener listener;
 	
+	private NetworkDestination rig_monitor;
+	
 	
 	public StorageNode() throws IOException, HashGridException {
 		try {
@@ -248,7 +252,11 @@ public class StorageNode implements RequestListener{
 		 */
 		nodeStatus.set("Reading network configuration");
 		network = NetworkConfig.readNetworkDescription(SystemConfig.getNetworkConfDir());
-
+		
+		
+		rig_monitor = network.getAllDestinations().get(0);
+		
+		
 		// identifying the group of this storage node
 		boolean nodeFound = false;
 		for (NodeInfo node : network.getAllNodes()) {
@@ -948,6 +956,41 @@ public class StorageNode implements RequestListener{
 			context.sendReply(new MetadataResponse(response));
 		}
 	}
+	
+	
+	@EventHandler
+	public void handleBlockQueryRequest(BlockQueryRequest event, EventContext context) {
+		
+		long queryId = System.currentTimeMillis();
+		
+		logger.info("RIKI: RECEIVED A INTEGRITY BLOCK REQUEST "+event.getMetadataQueryString());
+		
+		String fsName = event.getFilesystemName();
+		
+		GeospatialFileSystem fs = (GeospatialFileSystem) fsMap.get(fsName);//always roots
+		
+		if (fs != null) {
+			
+			List<String> rig_paths = fs.listRIGPaths(event.getTime(), event.getPolygon(), event.getMetadataQuery());
+				
+			BlockQueryResponse response = new BlockQueryResponse(queryId, rig_paths);
+			try {
+				context.sendReply(response);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				logger.log(Level.SEVERE, "RIKI: FAILURE WHILE SENDING BACK RESPONSE", e);
+			}
+			return;
+		
+				
+		
+		}
+	}
+	
+	
+	
+	
+	
 
 	/**
 	 * Handles a query request from a client. Query requests result in a number

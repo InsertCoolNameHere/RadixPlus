@@ -43,9 +43,20 @@ public class RadixIntegrityGraph {
 	
 	private static final Logger logger = Logger.getLogger("galileo");
 	
+	public void addPath(String irodsPath) {
+		
+		if(irodsPath.startsWith(rootPath)) {
+			String tmp = irodsPath.substring(rootPath.length());
+			addToPendingPath(tmp.split(rigPathSeparator));
+		} else {
+			logger.severe("RIKI: PATH FORMAT MISMATCH");
+		}
+	}
 	
 	// INITIALIZING THE HIERARCHICAL GRAPH WITH PRESET FEATURES
 	public RadixIntegrityGraph(String featureList, String rootPath, String fsName) {
+		
+		pendingPaths = new ArrayList<String[]>();
 		
 		this.rootPath = rootPath+rigPathSeparator+fsName+rigPathSeparator;
 		
@@ -66,6 +77,9 @@ public class RadixIntegrityGraph {
 		}
 		
 		hrig = new HierarchicalRadixGraph<>(this.featureList);
+		hrig.getRoot().path = this.rootPath;
+		hrig.getRoot().setLabel(new Feature("root",this.rootPath));
+		
 		
 	}
 	
@@ -75,6 +89,12 @@ public class RadixIntegrityGraph {
 		
 		// A MAP TO WHICH NODES AT EACH LEVEL NEEDS UPDATE
 		List<Set<String>> levelToLabelMap = new ArrayList<Set<String>>();
+		
+		
+		for(int i=0; i <= this.featureList.size(); i++) {
+			levelToLabelMap.add(i, new TreeSet<String>());
+		}
+		levelToLabelMap.get(0).add("root");
 		
 		int height = 0;
 		
@@ -91,34 +111,38 @@ public class RadixIntegrityGraph {
 				String tokens[] = pl.split("\\$\\$");
 				
 				if(cnt == 0) {
-					height = features.length+1;
+					height = features.length;
 					cnt++;
 				}
 				
 				// EXTRACTING THE CHECKSUM VALUE
-				long hashValue = Long.valueOf(tokens[2]);
-				
-				String irodsPath = tokens[1];
+				long hashValue = Long.valueOf(tokens[1]);
 				
 				// PUTTING ONLY THE IRODS PATH, WHICH IS THE ONLY RELEVANT DATA INTO THE FEATURES ARRAY
-				features[features.length - 1] = irodsPath;
+				features[features.length - 1] = tokens[0];
+				
+				String irodsPath = "";
+				for(String s: features)
+					irodsPath += s+rigPathSeparator;
+				irodsPath = irodsPath.substring(0, irodsPath.length()-1);
+				irodsPath = rootPath+irodsPath;
 				
 				try {
 					Metadata metadata = new Metadata();
 					FeatureSet featureset = new FeatureSet();
 					
-					for (int i = 0; i < features.length; i++) {
+					for (int i = 0; i < features.length-1; i++) {
 						Pair<String, FeatureType> pair = this.featureList.get(i);
 						
 						if (pair.b == FeatureType.FLOAT)
 							featureset.put(new Feature(pair.a, Math.getFloat(features[i])));
-						if (pair.b == FeatureType.INT)
+						else if (pair.b == FeatureType.INT)
 							featureset.put(new Feature(pair.a, Math.getInteger(features[i])));
-						if (pair.b == FeatureType.LONG)
+						else if (pair.b == FeatureType.LONG)
 							featureset.put(new Feature(pair.a, Math.getLong(features[i])));
-						if (pair.b == FeatureType.DOUBLE)
+						else if (pair.b == FeatureType.DOUBLE)
 							featureset.put(new Feature(pair.a, Math.getDouble(features[i])));
-						if (pair.b == FeatureType.STRING)
+						else if (pair.b == FeatureType.STRING)
 							featureset.put(new Feature(pair.a, features[i]));
 					}
 					metadata.setAttributes(featureset);
@@ -169,22 +193,46 @@ public class RadixIntegrityGraph {
 	 * @param query
 	 * @return
 	 */
-	public List<String[]> evaluateQuery(Query query) {
+	public List<String> evaluateQuery(Query query) {
 		List<String[]> featurePaths = new ArrayList<String[]>();
 		
 		// RETURN DIRECTORY/FILEPATHS....IF IT IS A DIRECTORY PATH, CALCULATE THE HASH OF THE DIRECTORY AFTER DOWNLOAD
 		List<RIGPath<Feature, String>> evaluatedPaths = hrig.evaluateQuery(query);
 		
 		for (RIGPath<Feature, String> path : evaluatedPaths) {
-			String[] featureValues = new String[path.size()];
+			String[] featureValues = new String[path.size()+1];
 			int index = 0;
 			for (Feature feature : path.getLabels())
 				featureValues[index++] = feature.getString();
+			featureValues[index] = getHashFromPayload(path.payload.iterator().next());
 			featurePaths.add(featureValues);
 		}
 		
-		return featurePaths;
+		List<String> rigpaths = new ArrayList<String>();
+		
+		for(String[] ss : featurePaths) {
+			String p = "";
+			int k = 0;
+			for(String s: ss) {
+				if(k == 0|| k == ss.length-1) {
+					p+=s;
+				} else if(k == ss.length-2) {
+					p+=s+"$$";
+				} else
+					p+=s+"/";
+				k++;
+			}
+			rigpaths.add(p);
+		}
+		
+		
+		return rigpaths;
 	
+	}
+	
+	public static String getHashFromPayload(String ph) {
+		String tokens[] = ph.split("\\$\\$");
+		return tokens[1];
 	}
 	
 	/**
@@ -213,10 +261,14 @@ public class RadixIntegrityGraph {
 			rv.path = pathDup;
 			
 			// Marking the nodes that have been changes in the tree
-			if(levelToLabelMap.get(i) == null) {
+			/*if(levelToLabelMap.get(i) == null) {
 				levelToLabelMap.add(i, new TreeSet<String>());
-			}
-			levelToLabelMap.get(i).add(pathDup);
+			}*/
+			
+			// MARKING THE LABELS AT A GIVEN LABELS THAT HAVE BEEN ALTERED AND HENCE NEED RECOMPUTATION
+			// THE LEVEL AT THE LEAF DOES NOT NEED ANY UPDATING, ITS HASHVALUE IS ALREADY SET AND UPDATED
+			if(i != path.getVertices().size()-1)
+			levelToLabelMap.get(i+1).add(rv.label.dataToString());
 			
 			// ADDING THE HASHVALUE TO THE LEAF VERTEX ONLY
 			if(i == path.getVertices().size()-1) {
@@ -229,12 +281,15 @@ public class RadixIntegrityGraph {
 				MerkleTree mt = new MerkleTree(sign, ps);
 				rv.setMerkleTree(mt);
 				
-				rv.path = pathDup;
+				//rv.path = pathDup;
 				rv.hashValue = hashValue;
+				
+				int indx = pathDup.lastIndexOf(rigPathSeparator);
+				pathDup = pathDup.substring(0,indx);
 			}
 			
 			int indx = pathDup.lastIndexOf(rigPathSeparator);
-			pathDup = pathDup.substring(0,indx-1);
+			pathDup = pathDup.substring(0,indx);
 		}
 		//path.get(index)
 		return path;

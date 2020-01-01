@@ -27,6 +27,7 @@ package galileo.integrity;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -112,6 +113,7 @@ public class HierarchicalRadixGraph<T> {
     }
     
     public HierarchicalRadixGraph(List<Pair<String, FeatureType>> hierarchy) {
+    	
     	if(hierarchy == null)
     		return;
         for (Pair<String, FeatureType> feature : hierarchy) {
@@ -190,7 +192,8 @@ public class HierarchicalRadixGraph<T> {
 	            tracker.nextLevel();
 	            
 	            boolean lastTime = false;
-	            if(feature.equals(lastFeature) && tracker.getCurrentLevel() < tracker.results.size()) {
+	            
+	            if(feature.equals(lastFeature) /*&& tracker.getCurrentLevel() < tracker.results.size()*/) {
 	            	// TIME TO RETURN WHOLE DIRECTORY INSTEAD OF BLOCKS
 	            	lastTime = true;
 	            }
@@ -214,13 +217,15 @@ public class HierarchicalRadixGraph<T> {
 	
 	                for (RIGPath<Feature, T> path : tracker.getCurrentResults()) {
 	                    RIGVertex<Feature, T> vertex = path.getTail();
-	                    Collection<RIGVertex<Feature, T>> resultCollection
-	                        = evaluateExpressions(expressions, vertex);
+	                    
+	                    Collection<RIGVertex<Feature, T>> resultCollection = evaluateExpressions(expressions, vertex);
 	                    
 	                    if(!lastTime)
 	                    	tracker.addResults(path, resultCollection);
-	                    else 
+	                    else {
 	                    	tracker.addLastResults(path, resultCollection);
+	                    	return;
+	                    }
 	                }
 	            }
 	            
@@ -475,44 +480,50 @@ public class HierarchicalRadixGraph<T> {
 	public void updateHashes(int height, List<Set<String>> levelToLabelMap) {
 		
 		// LEVEL TRAVERSAL, STARTING FROM BOTTOM TO TOP
-		for(int i = height-1; i > 0; i--) {
-			List<String> currentLevel = new ArrayList<String>();
-			levelTraverser(root, i, levelToLabelMap);
-			System.out.println(currentLevel);
-			System.out.println("==================================");
+		for(int i = height; i > 0; i--) {
+			//List<String> currentLevel = new ArrayList<String>();
+			levelTraverser(root, i, levelToLabelMap, i);
+			//System.out.println(currentLevel);
+			//System.out.println("==================================");
 		}
 		
 	}
 	
-	public void levelTraverser(RIGVertex<Feature, T> node, int lvl, List<Set<String>> levelToLabelMap) {
+	public void levelTraverser(RIGVertex<Feature, T> node, int lvl, List<Set<String>> levelToLabelMap, int actualLevel) {
         
         if(node == null)
             return;
         
         
-        // MAKE SURE THIS RIG VERTEX ACTUALLY NEEDS RECOMPUTATION
-        if(levelToLabelMap.get(lvl) != null && levelToLabelMap.get(lvl).contains(node.path)) {
-        	
-        } else {
-        	return;
-        }
-        
         
         if(lvl == 1) {
             // THIS IS THE LEVEL WE ARE LOOKING FOR
             if(node != null) {
+            	
+            	// MAKE SURE THIS RIG VERTEX ACTUALLY NEEDS RECOMPUTATION
+                if(levelToLabelMap.get(actualLevel-1) != null && levelToLabelMap.get(actualLevel-1).contains(node.label.dataToString())) {
+                	
+                } else {
+                	return;
+                }
+            	
                 
                 // GET ALL CHILDREN AND THEIR SIGNATURES
                 // COMBINE THE SIGNATURES AND CREATE A MERKLE TREE
                 
+            	List<Tuple> combinations = new ArrayList<Tuple>();
                 List<Long>  childrenSignatures = new ArrayList<Long>();
                 List<String>  childrenPaths = new ArrayList<String>();
                 
                 for(RIGVertex<Feature, T> n : node.edges.values()) {
-                	childrenSignatures.add(n.hashValue);
                 	
-                	childrenPaths.add(n.path);
+                	combinations.add(new Tuple(n.hashValue,n.path));
+                	//childrenSignatures.add(n.hashValue);
+                	
+                	//childrenPaths.add(n.path);
                 }
+                
+                sortChildren(combinations, childrenPaths, childrenSignatures);
                 
                 MerkleTree mt = new MerkleTree(childrenSignatures, childrenPaths);
                 
@@ -521,14 +532,61 @@ public class HierarchicalRadixGraph<T> {
                 
             }
             
-            
             return;
         } else {
         	for(RIGVertex<Feature, T> m : node.edges.values()) {
-        		levelTraverser(m, lvl-1, levelToLabelMap);
+        		levelTraverser(m, lvl-1, levelToLabelMap, actualLevel);
             
         	}
         }
         
     }
+	
+	
+	/**
+	 * BRINGING ORDER TO HOW CHILDREN ARE COMBINED TO FORM A PARENT HASHVALUE
+	 * @author sapmitra
+	 * @param combinations
+	 * @param childPaths
+	 * @param childSignatures
+	 */
+	public static void sortChildren(List<Tuple> combinations, List<String> childPaths, List<Long> childSignatures) {
+		
+		Collections.sort(combinations, new Comparator<Tuple>()
+        {
+            public int compare( Tuple o1, Tuple o2 )
+            {
+                return (o1.stringValue).compareTo( o2.stringValue);
+            }
+        } );
+		
+		for(Tuple t : combinations) {
+			childSignatures.add(t.lonValue);
+        	
+			childPaths.add(t.stringValue);
+		}
+		
+		
+	}
+	
+	public static void main(String arg[]) {
+		
+		List<Long>  childrenSignatures = new ArrayList<Long>();
+        List<String>  childrenPaths = new ArrayList<String>();
+		
+		List<Tuple> com = new ArrayList<>();
+		com.add(new Tuple(2,"b"));
+		com.add(new Tuple(5,"e"));
+		com.add(new Tuple(1,"a"));
+		com.add(new Tuple(3,"c"));
+		com.add(new Tuple(4,"d"));
+		
+		sortChildren(com, childrenPaths, childrenSignatures);
+		
+		System.out.println("Hi");
+		
+	}
+	
+	
+	
 }

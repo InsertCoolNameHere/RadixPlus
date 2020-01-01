@@ -24,40 +24,47 @@ software, even if advised of the possibility of such damage.
 */
 package galileo.comm;
 
-import galileo.event.EventMap;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
-public class GalileoEventMap extends EventMap {
-    public GalileoEventMap() {
-        addMapping(10, DebugEvent.class);
+import galileo.event.Event;
+import galileo.serialization.SerializationException;
+import galileo.serialization.SerializationInputStream;
+import galileo.serialization.SerializationOutputStream;
 
-        addMapping(100, StorageEvent.class);
-        addMapping(101, StorageRequest.class);
-        addMapping(102, NonBlockStorageRequest.class);
-        addMapping(103, NonBlockStorageEvent.class);
-        addMapping(104, IRODSRequest.class);
-        
-        
-        addMapping(105, IRODSReadyCheckRequest.class);
-        addMapping(106, IRODSReadyCheckResponse.class);
-        
-        addMapping(200, QueryEvent.class);
-        addMapping(201, QueryRequest.class);
-        addMapping(202, QueryPreamble.class);
-        addMapping(203, QueryResponse.class);
-        
-        addMapping(301, MetadataRequest.class);
-        addMapping(302, MetadataResponse.class);
-        addMapping(303, MetadataEvent.class);
-        
-        addMapping(401, BlockRequest.class);
-        addMapping(402, BlockResponse.class);
-        
-        addMapping(501, FilesystemRequest.class);
-        addMapping(502, TemporalFilesystemEvent.class);
-        addMapping(503, TemporalFilesystemRequest.class);
-        addMapping(504, FilesystemEvent.class);
-        
-        addMapping(601, BlockQueryRequest.class);
-        addMapping(602, BlockQueryResponse.class);
-    }
+public class BlockQueryResponse implements Event {
+	
+	private String id;
+	public List<String> pathResults;
+	
+
+	public BlockQueryResponse(long queryId, List<String> rig_paths) {
+		pathResults = rig_paths;
+		id = queryId+"";
+	}
+	
+	@Deserialize
+	public BlockQueryResponse(SerializationInputStream in) throws IOException, SerializationException {
+		id = in.readString();
+		
+		boolean hasPaths = in.readBoolean();
+		if(hasPaths) {
+			pathResults = new ArrayList<String>();
+			in.readStringCollection(pathResults);
+		}
+		
+	}
+
+
+	@Override
+	public void serialize(SerializationOutputStream out) throws IOException {
+		out.writeString(id);
+		if(pathResults == null)
+			out.writeBoolean(false);
+		else { 
+			out.writeBoolean(true);
+			out.writeStringCollection(pathResults);
+		}
+	}
 }

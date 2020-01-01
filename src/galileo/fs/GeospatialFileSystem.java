@@ -89,6 +89,7 @@ import galileo.graph.MetadataGraph;
 import galileo.graph.Path;
 import galileo.graph.SummaryStatistics;
 import galileo.graph.SummaryWrapper;
+import galileo.integrity.RadixIntegrityGraph;
 import galileo.query.Expression;
 import galileo.query.Operation;
 import galileo.query.Operator;
@@ -151,17 +152,23 @@ public class GeospatialFileSystem extends FileSystem {
 	private static final String TEMPORAL_HOUR_FEATURE = "x__hour__x";
 	private static final String SPATIAL_FEATURE = "x__spatial__x";
 	
+	
+	
 	// A MAP BETWEEN THE FILEPATH AND THE CORRESPONDING SUMMARY OF THAT PLOT FILE
 	// JUST FILENAME IS ENOUGH FOR KEY
 	private Map<String, SummaryStatistics> filePathToSummaryMap = new HashMap<String, SummaryStatistics>();
 	private HashGrid globalGrid;
 	private FilesystemConfig configs;
+	
+	private RadixIntegrityGraph rig;
 
 	public GeospatialFileSystem(StorageNode sn, String storageDirectory, String name, int precision, int nodesPerGroup,
 			int temporalType, NetworkInfo networkInfo, String featureList, SpatialHint sHint, boolean ignoreIfPresent, FilesystemConfig config)
 			throws FileSystemException, IOException, SerializationException, PartitionException, HashException,
 			HashTopologyException {
 		super(storageDirectory, name, ignoreIfPresent, "geospatial");
+		
+		RadixIntegrityGraph rig = new RadixIntegrityGraph(TEMPORAL_YEAR_FEATURE+":1,"+TEMPORAL_MONTH_FEATURE+":1,day:1,sensor:9", "/iplant/home/radix_subterra", "arizona");
 		
 		//logger.info("RIKI: REACHED HERE2");
 		this.master = sn;
@@ -882,14 +889,127 @@ public class GeospatialFileSystem extends FileSystem {
 		}
 		return paths;
 	}
+	
+	/**
+	 * QUERYING THE R.I.G. INSTEAD OF THE METADATA GRAPH
+	 * @author sapmitra
+	 * @param temporalProperties
+	 * @param spatialProperties
+	 * @param metadataQuery
+	 * @return
+	 */
+	public List<String> listRIGPaths(String temporalProperties, List<Coordinates> spatialProperties, Query metadataQuery) {
+		
+		List<String> blocks = new ArrayList<String>();
+		
+		List<Expression> temporalExpression = null;
+		if(temporalProperties != null) {
+			temporalExpression = buildTemporalExpression(temporalProperties);
+		}
+		
+		SpatialProperties sp = new SpatialProperties(new SpatialRange(spatialProperties));
+		
+		List<Coordinates> geometry = sp.getSpatialRange().hasPolygon() ? sp.getSpatialRange().getPolygon()
+				: sp.getSpatialRange().getBounds();
+		
+		List<String> hashLocations = new ArrayList<>(Arrays.asList(GeoHash.getIntersectingGeohashes(geometry, Partitioner.SPATIAL_PRECISION+2)));
+		
+		
+		if(Partitioner.SPATIAL_PRECISION < getGlobalGrid().getPrecision()) {
+			List<String> finerGeohashes = new ArrayList<String>();
+			
+			for(String h: hashLocations) {
+				List<String> tmp = GeoHash.getInternalGeohashes(h, getGlobalGrid().getPrecision());
+				if(tmp != null && tmp.size() > 0)
+					finerGeohashes.addAll(tmp);
+			}
+			
+			hashLocations = finerGeohashes;
+		}
+		
+		Query query = new Query();
+		
+		List<Operation> pending_operations = null;
+		
+		if(metadataQuery != null)
+			pending_operations = metadataQuery.getOperations();
+		
+		if(temporalExpression != null) {
+			for(Operation op : pending_operations) {
+				op.addExpressions(temporalExpression);
+			}
+		}
+
+		HashGrid queryGrid = new HashGrid(configs.getBaseHashForGrid(), getGlobalGrid().getPrecision(), configs.getNw(), configs.getNe(), 
+				configs.getSe(), configs.getSw());
+		
+		//logger.info("RIKI: HERE X1");
+		for (String ghash : hashLocations)
+			try {
+				queryGrid.addPoint(ghash);
+			} catch (BitmapException e1) {
+			}
+		queryGrid.applyUpdates();
+		
+		int [] intersections = getGlobalGrid().query(queryGrid.getBitmap());
+		
+		hashLocations.clear();
+		
+		
+		for (Integer i : intersections)
+			hashLocations.add(getGlobalGrid().indexToGeoHash(i, configs.getHashGridPrecision()));
+			
+		
+		//logger.info("RIKI: INTERSECTING GEOHASHES FOR GRID: "+hashLocations);
+		//Once coverage is computed, query hashgrid to determine which plots are contained in polygon
+		Set<Integer> overlappingPlots = new HashSet<>();
+		for (String ghash : hashLocations) {
+			Set<Integer> plots;
+			try {
+				plots = getGlobalGrid().locatePoint(ghash);
+				overlappingPlots.addAll(plots);
+			} catch (BitmapException e) {
+				//If this error is caught, it means there is no data for given index
+			}
+		}
+		
+		logger.info("RIKI: OVERLAPPING RIG PLOTS FOUND: "+ overlappingPlots);
+		
+		/* Operations: OR; Expressions: AND. So create your operations accordingly */
+		
+		for (int intersection : overlappingPlots) {//intersections are the 5-char intersections...
+			if(pending_operations == null) {
+				Operation op = new Operation();
+				
+				op.addExpressions(new Expression(Operator.EQUAL, new Feature("plotID", intersection)));
+				query.addOperation(op);
+				
+			} else {
+				for(Operation o : pending_operations) {
+					Operation op = new Operation(o.getExpressions());
+					op.addExpressions(new Expression(Operator.EQUAL, new Feature("plotID", intersection)));
+					query.addOperation(op);
+				}
+			}
+			
+			
+		}
+		
+		blocks = rig.evaluateQuery(query);
+		
+		return blocks;
+	}
+		
+		
 
 	public Map<String, List<String>> listBlocks(String temporalProperties, List<Coordinates> spatialProperties,
 			Query metaQuery, boolean group, String sensorName) throws InterruptedException {
+		
 		Map<String, List<String>> blockMap = new HashMap<String, List<String>>();
 		String space = null;
 		List<Path<Feature, String>> paths = null;
 		List<String> blocks = new ArrayList<String>();
-		if (temporalProperties != null && spatialProperties != null) {
+		/*if (temporalProperties != null && spatialProperties != null) {
 			SpatialProperties sp = new SpatialProperties(new SpatialRange(spatialProperties));
 			List<Coordinates> geometry = sp.getSpatialRange().hasPolygon() ? sp.getSpatialRange().getPolygon()
 					: sp.getSpatialRange().getBounds();
@@ -930,9 +1050,14 @@ public class GeospatialFileSystem extends FileSystem {
 			Query query = new Query(
 					new Operation(temporalExpressions.toArray(new Expression[temporalExpressions.size()])));
 			paths = metadataGraph.evaluateQuery(queryIntersection(query, metaQuery));
-		} else if (spatialProperties != null) {
+		} else */if (spatialProperties != null) {
 			// THIS IS WHERE POLYGON QUERY ENTERS
 			logger.info("RIKI: PERFORMING SPATIAL QUERY");
+			
+			List<Expression> temporalExpression = null;
+			if(temporalProperties != null) {
+				temporalExpression = buildTemporalExpression(temporalProperties);
+			}
 			
 			SpatialProperties sp = new SpatialProperties(new SpatialRange(spatialProperties));
 			List<Coordinates> geometry = sp.getSpatialRange().hasPolygon() ? sp.getSpatialRange().getPolygon()
@@ -1015,7 +1140,12 @@ public class GeospatialFileSystem extends FileSystem {
 			
 			for (int intersection : overlappingPlots) {//intersections are the 5-char intersections...
 //				overlappingPlots.add(master.getGlobalGrid().locatePoint(intersection));
-				Operation op = new Operation();
+				Operation op = null;
+				if(temporalExpression != null)
+					op = new Operation(temporalExpression);
+				else
+					op = new Operation();
+				
 				op.addExpressions(new Expression(Operator.EQUAL, new Feature("plotID", intersection)));
 				// EXTRA SENSORNAME QUERY ADDED FOR ARIZONA ONLY
 				if(sensorName!=null && !sensorName.trim().isEmpty()) {
@@ -1510,6 +1640,18 @@ public class GeospatialFileSystem extends FileSystem {
 		return configs.getLonIndex(fileSensorType);
 	}
 
-	
+	public RadixIntegrityGraph getRig() {
+		return rig;
+	}
+
+	public void setRig(RadixIntegrityGraph rig) {
+		this.rig = rig;
+	}
+
+	public void addIRODSPendingPath(String absolutePath, long hashValue) {
+		rig.addPath(absolutePath+"$$"+hashValue);
+		
+	}
+
 	
 }
