@@ -37,6 +37,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -56,6 +57,8 @@ import org.irods.jargon.core.pub.io.IRODSFile;
 import org.irods.jargon.core.pub.io.IRODSFileFactory;
 import org.irods.jargon.core.transfer.TransferStatus;
 import org.irods.jargon.core.transfer.TransferStatusCallbackListener;
+import org.irods.jargon.core.transfer.TransferStatusCallbackListener.CallbackResponse;
+import org.irods.jargon.core.transfer.TransferStatusCallbackListener.FileStatusCallbackResponse;
 import org.irods.jargon.core.transfer.DefaultTransferControlBlock;
 import org.irods.jargon.core.transfer.TransferControlBlock;
 
@@ -67,6 +70,8 @@ public class IRODSManager {
 	private IRODSFileSystem filesystem;
 	private IRODSFileFactory fileFactory;
 	private DataTransferOperations dataTransferOperationsAO;
+	
+	String IRODS_BASE = "/iplant/home/radix_subterra";
 	
 	
 	public IRODSManager() {	//davos.cyverse.org
@@ -82,6 +87,87 @@ public class IRODSManager {
 		}	 
 	}
 	
+	
+	/**
+	 * 
+	 * @author sapmitra
+	 * @param data ACTUAL DATA TO BE WRITTEN
+	 * @param irodspath path to the file after radix_subterra directory
+	 */
+	public void writeRemoteData(String data, String irodspath) {
+		try {
+			
+			String fileName = irodspath.substring(irodspath.lastIndexOf("/")+1);
+			
+			File temp = File.createTempFile(fileName, ".txt");
+
+			if (!temp.exists())
+				temp.createNewFile();
+			PrintWriter tempWriter = new PrintWriter(temp);
+			tempWriter.write(data);
+			tempWriter.close();
+			
+			
+			try {
+				writeRemoteFileAtSpecificPath(temp, irodspath);
+			} catch (JargonException e) {
+				// TODO Auto-generated catch block
+				logger.severe("RIKI: ERROR WRITING,,,"+e);
+			}
+			
+			
+			temp.delete();
+
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	
+	public void writeRemoteFileAtSpecificPath(File toExport, String remoteDirectory)throws JargonException{
+		TransferOptions opts = new TransferOptions();
+		opts.setComputeAndVerifyChecksumAfterTransfer(true);
+		opts.setIntraFileStatusCallbacks(true);
+		TransferControlBlock tcb = DefaultTransferControlBlock.instance();
+		tcb.setTransferOptions(opts);
+		tcb.setMaximumErrorsBeforeCanceling(10);
+		tcb.setTotalBytesToTransfer(toExport.length());
+		
+		
+		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
+		
+		logger.info("RIKI: RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
+		IRODSFile remoteDir = null;
+		try {
+			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
+			logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
+			try {
+				remoteDir.mkdirs();
+				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
+			} catch(UnixFileCreateException e) {
+				logger.info("UnixFileCreateException caught, trying again.");
+				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
+			}//shouldn't need to catch overwrite exceptions now...
+			catch(DataNotFoundException e) {
+				//stupid IRODS... directory was not created properly, so create it again and retry
+				remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
+				remoteDir.mkdirs();
+				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
+			} catch (OverwriteException | JargonFileOrCollAlreadyExistsException | DuplicateDataException e){//append to existing file
+				logger.severe("CAUGHT OVERWRITE EXCEPTION!");
+				
+			}
+		} catch (JargonException e) {
+			logger.severe("Error with IRODS: " + e + ": " + Arrays.toString(e.getStackTrace())+"\nFile: " + toExport.getAbsolutePath());
+		}
+		
+		
+	}
+	
+	
+	
+	
 	public void writeRemoteFile(File toExport, MessageHandler caller)throws JargonException{
 		TransferOptions opts = new TransferOptions();
 		opts.setComputeAndVerifyChecksumAfterTransfer(true);
@@ -94,7 +180,7 @@ public class IRODSManager {
 		// PATH USED TO LOOK LIKE /iplant/home/radix_subterra/plots/970/2018/12.../xyz.gblock
 		// NOW: 
 		
-		String remoteDirectory = "plots" + toExport.getAbsolutePath().replaceAll(SystemConfig.getRootDir(), "").replaceAll("/dailyTemp", "");
+		String remoteDirectory = "plots" + toExport.getAbsolutePath().replaceAll(SystemConfig.getRootDir(), "");
 		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
 		logger.info("remoteDirectory string: " + remoteDirectory);
 		IRODSFile remoteDir = null;
@@ -165,4 +251,83 @@ public class IRODSManager {
 		}
 		
 	}
+
+
+	/**
+	 * RETURNS THE PATH LINE LIST READ FROM THE DUMP FILES
+	 * @author sapmitra
+	 * @param fsName
+	 * @return
+	 * @throws JargonException
+	 * @throws IOException 
+	 */
+	public String[] readAllRemoteFiles(String fsName) throws JargonException, IOException{
+		StringBuffer sb = new StringBuffer();
+		
+		TransferOptions opts = new TransferOptions();
+		//opts.setComputeAndVerifyChecksumAfterTransfer(true);
+		opts.setIntraFileStatusCallbacks(true);
+		TransferControlBlock tcb = DefaultTransferControlBlock.instance();
+		tcb.setTransferOptions(opts);
+		
+		TransferStatusCallbackListener tscl = new TransferStatusCallbackListener() {
+			@Override
+			public FileStatusCallbackResponse statusCallback(TransferStatus transferStatus) {
+				return FileStatusCallbackResponse.CONTINUE;
+			}
+
+			@Override
+			public void overallStatusCallback(TransferStatus transferStatus) {
+			}
+
+			@Override
+			public CallbackResponse transferAsksWhetherToForceOperation(String irodsAbsolutePath,
+					boolean isCollection) {
+				return CallbackResponse.YES_FOR_ALL;
+			}
+		};
+		
+		File temp = new File("/tmp/sampleData");
+		if (!temp.exists())
+			temp.mkdirs();
+		//IRODSFile remoteFile = fileFactory.instanceIRODSFile("plots/");
+		IRODSFile toFetch = fileFactory.instanceIRODSFile(fsName+"/rig");
+		//IRODSFile toFetch = fileFactory.instanceIRODSFile("util/me");
+		
+		if (!toFetch.exists()) {
+			
+			logger.info("RIKI: NOT EXISTS:"+"/"+fsName+"/rig");
+			//System.out.println("RIKI: NOT EXISTS:"+"/util/me");
+			//Thread.sleep(100);
+			
+		}
+		dataTransferOperationsAO.getOperation(toFetch, temp, tscl, tcb);
+		
+		temp = new File("/tmp/sampleData/rig");
+		
+		//temp = new File("/tmp/sampleData/me");
+		for(File f : temp.listFiles()) {
+		
+			String remoteContents = new String(Files.readAllBytes(Paths.get(f.getAbsolutePath())));
+			sb.append(remoteContents);
+		}
+		
+		temp.delete();
+		
+		
+		String[] paths = sb.toString().split("\\n");
+		//System.out.println("FINISHED FETCHING "+sb.toString());
+		return paths;
+		
+	}
+	
+	
+	public static void main(String arg[]) throws JargonException, IOException {
+		
+		IRODSManager im = new IRODSManager();
+		im.readAllRemoteFiles("ik");
+	}
+	
+	
+	
 }

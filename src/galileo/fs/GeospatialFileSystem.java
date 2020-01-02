@@ -168,7 +168,7 @@ public class GeospatialFileSystem extends FileSystem {
 			HashTopologyException {
 		super(storageDirectory, name, ignoreIfPresent, "geospatial");
 		
-		RadixIntegrityGraph rig = new RadixIntegrityGraph(TEMPORAL_YEAR_FEATURE+":1,"+TEMPORAL_MONTH_FEATURE+":1,day:1,sensor:9", "/iplant/home/radix_subterra", "arizona");
+		rig = new RadixIntegrityGraph(TEMPORAL_YEAR_FEATURE+":1,"+TEMPORAL_MONTH_FEATURE+":1,"+TEMPORAL_DAY_FEATURE+":1,sensor:9", "/iplant/home/radix_subterra", name);
 		
 		//logger.info("RIKI: REACHED HERE2");
 		this.master = sn;
@@ -1648,8 +1648,13 @@ public class GeospatialFileSystem extends FileSystem {
 		this.rig = rig;
 	}
 
-	public void addIRODSPendingPath(String absolutePath, long hashValue) {
-		rig.addPath(absolutePath+"$$"+hashValue);
+	public void addIRODSPendingPath(String filePath) {
+		rig.addPath(filePath);
+		
+	}
+
+	public void updateRIG() {
+		rig.updatePathsIntoRIG();
 		
 	}
 

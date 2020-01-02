@@ -52,6 +52,7 @@ import org.irods.jargon.core.exception.JargonFileOrCollAlreadyExistsException;
 import org.irods.jargon.core.exception.OverwriteException;
 import org.irods.jargon.core.exception.UnixFileCreateException;
 import org.irods.jargon.core.packinstr.TransferOptions;
+import org.irods.jargon.core.packinstr.TransferOptions.PutOptions;
 import org.irods.jargon.core.pub.DataObjectAO;
 import org.irods.jargon.core.pub.DataTransferOperations;
 import org.irods.jargon.core.pub.IRODSFileSystem;
@@ -75,8 +76,7 @@ public class IRODSManagerTest {
 	private DataTransferOperations dataTransferOperationsAO;
 	private DataObjectAO dataObjectAO;
 	
-	
-	public static void main(String arg[]) throws JargonException {
+	public static void main1(String arg[]) throws JargonException {
 		
 		IRODSManagerTest tst = new IRODSManagerTest();
 		
@@ -94,10 +94,15 @@ public class IRODSManagerTest {
 		
 	}
 	
+	public static void main(String arg[]) throws JargonException {
+		IRODSManagerTest tst = new IRODSManagerTest();
+		tst.writeRemoteFile(new File("/s/chopin/b/grad/sapmitra/Desktop/NOTICE"));
+	}
+	
 	public IRODSManagerTest() {	//davos.cyverse.org
 									//host, port, userName, password, homeDirectory, userZone, defaultStorageResource
 		//account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home/radix_subterra", "iplant", "");
-		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home", "iplant", "");
+		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home/radix_subterra", "iplant", "");
 		try {
 			filesystem = IRODSFileSystem.instance();
 			fileFactory = filesystem.getIRODSFileFactory(account);
@@ -271,8 +276,6 @@ public class IRODSManagerTest {
 	}
 	
 	
-	
-	
 	public void writeRemoteFile(File toExport)throws JargonException{
 		TransferOptions opts = new TransferOptions();
 		opts.setComputeAndVerifyChecksumAfterTransfer(true);
@@ -281,6 +284,9 @@ public class IRODSManagerTest {
 		tcb.setTransferOptions(opts);
 		tcb.setMaximumErrorsBeforeCanceling(10);
 		tcb.setTotalBytesToTransfer(toExport.length());
+		
+		PutOptions p = opts.getPutOption();
+		
 		//String remoteDirectory = "plots" + toExport.getAbsolutePath().replaceAll(SystemConfig.getRootDir(), "").replaceAll("/dailyTemp", "");
 		String remoteDirectory = "riki/" + toExport.getName();
 		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
@@ -293,6 +299,7 @@ public class IRODSManagerTest {
 			logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
 			try {
 				remoteDir.mkdirs();
+				
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
 			} catch(UnixFileCreateException e) {
 				logger.info("UnixFileCreateException caught, trying again.");

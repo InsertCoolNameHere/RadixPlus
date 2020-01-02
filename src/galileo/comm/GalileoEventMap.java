@@ -59,5 +59,6 @@ public class GalileoEventMap extends EventMap {
         
         addMapping(601, BlockQueryRequest.class);
         addMapping(602, BlockQueryResponse.class);
+        addMapping(603, RigUpdateRequest.class);
     }
 }

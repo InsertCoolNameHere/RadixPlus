@@ -118,6 +118,13 @@ public class DataStoreHandler {
 	
 	public static int irodsCheckTimeSecs = 30;
 	
+	public Map<String,List<String>> pathsPending = new HashMap<String,List<String>>();
+	
+	private boolean irodsInsertionStarted = false;
+	private long lastIRODSInsertionTime;
+	public static int irodsAcceptableDelay = 10*1000;
+	private Timer IRODS_RIG_UPDATER = new Timer();
+	
 	public DataStoreHandler(StorageNode sn) {
 		
 		lastMessageTime = System.currentTimeMillis();
@@ -162,6 +169,47 @@ public class DataStoreHandler {
 			}
 		//}, 60 * 1000, 10 * 1000);
 		}, 20 * 1000, 10 * 1000);
+		
+		
+		IRODS_RIG_UPDATER.scheduleAtFixedRate(new TimerTask() {
+			@Override
+			public void run() {
+				
+				if(!irodsInsertionStarted)
+					return;
+				
+				if(System.currentTimeMillis() - lastIRODSInsertionTime < irodsAcceptableDelay) {
+					logger.info("RIKI: DETECTED IRODS ACTIVITY...WILL WAIT FOR IT TO STOP");
+					return;
+				}
+				logger.info("RIKI: IRODS ACTIVITY HAS STOPPED..READY TO UNLOAD PATHS");
+				
+				
+				for(String key : pathsPending.keySet()) {
+					List<String> paths = pathsPending.get(key);
+					
+					if(paths == null || paths.size() == 0)
+						continue;
+					
+					String fname = paths.get(0);
+					int fi = fname.indexOf("/");
+					
+					fname = fname.substring(0, fi);
+					
+					StringBuffer sb = new StringBuffer("");
+					
+					for(String p : paths) {
+						sb.append(p+"\n");
+					}
+					
+					subterra.writeRemoteData(sb.toString(), fname+"/rig/idump-"+fname+"-"+System.currentTimeMillis());
+					
+				}
+				
+				irodsInsertionStarted = false;
+			}
+		//}, 60 * 1000, 10 * 1000);
+		}, (irodsCheckTimeSecs+30)*1000, irodsCheckTimeSecs*1000);
 		
 		// THIS IS FOR IRODS STORAGE
 		// READS THE TEMPORARY GALILEO FILE WITH BACKED UP RECORDS AND SENDS IT TO IRODS FOR STORAGE
@@ -222,6 +270,9 @@ public class DataStoreHandler {
 											dataRequest.setFilePath(SystemConfig.getRootDir() + File.separator + thisFS+ File.separator + entry.getKey() + "/" +
 													entry.getValue().replaceAll("-", "/") + "/" + entry.getKey()+"-" + entry.getValue() + ".gblock");
 											unProcessedMessages.offer(dataRequest);
+											
+											irodsInsertionStarted = true;
+											
 										}
 									}
 								}
@@ -578,6 +629,7 @@ public class DataStoreHandler {
 				}
 				String sortedPlotData = newData.toString().trim();
 				
+				
 				// OVERWRITING PARTIAL PLOT DATA WITH FULL DATA, COMBINED FROM ALL NODES
 				logger.info("RIKI: WRITING OUT FULL PLOT DATA TO :"+localPlotData.getAbsolutePath()+" AT NODE: "+sn.getHostName());
 				
@@ -589,13 +641,31 @@ public class DataStoreHandler {
 				logger.info("RIKI: COULD HAVE SENT TO IRODS, BUT DIDNT");
 				
 				//Send off to IRODS
-				/*if (msg.getPlotID() < 100)
-					subterra.writeRemoteFile(localPlotData, this);
-				*/
+				if (msg.getPlotID() > 0) {
+					try {
+						subterra.writeRemoteFile(localPlotData, this);
+					} catch (JargonException e1) {
+						logger.severe("RIKI: IRODS SENDING ENCOUNTERED "+ e1);
+					}
+				}
+				
+				lastIRODSInsertionTime = System.currentTimeMillis();
 				
 				Adler32 a1 = new Adler32();
 				a1.update(sortedPlotData.getBytes());
-				fs.addIRODSPendingPath(localPlotData.getAbsolutePath(), a1.getValue());
+				String actPath = localPlotData.getAbsolutePath().replaceAll(SystemConfig.getRootDir(),"");
+				
+				List<String> pPaths = new ArrayList<String>();
+				
+				synchronized(pathsPending) {
+					
+					if(pathsPending.get(fsName) == null)
+						pathsPending.put(fsName,pPaths);
+					else { 
+						pPaths = pathsPending.get(fsName);
+						pPaths.add(IRODS_BASE_PATH+actPath+"$$"+ a1.getValue());
+					}
+				}
 				
 				
 			} catch (IOException | InterruptedException e) {
@@ -702,7 +772,6 @@ public class DataStoreHandler {
 				} else {
 					msg.getFS().storeBlockArizona(block, sensorType, summary, irodsStoragePath);
 				}
-				
 				
 				// A TEMPORARY FILE IS ALSO SAVED IN GALILEO THAT SAVES THE ACTUAL BLOCK DATA
 				

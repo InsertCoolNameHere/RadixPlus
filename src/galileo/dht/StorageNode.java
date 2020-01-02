@@ -56,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.irods.jargon.core.exception.JargonException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -87,6 +88,7 @@ import galileo.comm.NonBlockStorageRequest;
 import galileo.comm.QueryEvent;
 import galileo.comm.QueryRequest;
 import galileo.comm.QueryResponse;
+import galileo.comm.RigUpdateRequest;
 import galileo.comm.StorageEvent;
 import galileo.comm.StorageRequest;
 import galileo.comm.TemporalType;
@@ -166,6 +168,7 @@ public class StorageNode implements RequestListener{
 	private Listener listener;
 	
 	private NetworkDestination rig_monitor;
+	private boolean isMonitor = false;
 	
 	
 	public StorageNode() throws IOException, HashGridException {
@@ -256,7 +259,8 @@ public class StorageNode implements RequestListener{
 		
 		rig_monitor = network.getAllDestinations().get(0);
 		
-		
+		if(rig_monitor.getHostname().equals(canonicalHostname)||rig_monitor.getHostname().equals(hostname))
+			isMonitor = true;
 		// identifying the group of this storage node
 		boolean nodeFound = false;
 		for (NodeInfo node : network.getAllNodes()) {
@@ -553,6 +557,41 @@ public class StorageNode implements RequestListener{
 			}
 		}		
 	}
+	
+	
+	
+	@EventHandler
+	public void handleRIGUpdateRequest(RigUpdateRequest request, EventContext context) throws IOException {
+		
+		if(!isMonitor) {
+			logger.info("RIKI: NON-MONITOR");
+			return;
+		}
+		String fsName = request.getFilesystem();
+		if (fsName != null) {
+			GeospatialFileSystem gfs = (GeospatialFileSystem) fsMap.get(fsName);
+			if (gfs != null) {
+				
+				IRODSManager subterra = new IRODSManager();
+				
+				String[] paths = null;
+				try {
+					paths = subterra.readAllRemoteFiles(fsName);
+				} catch (JargonException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				
+				for(String path: paths) {
+					gfs.addIRODSPendingPath(path);
+				}
+				
+				gfs.updateRIG();
+			}
+		}		
+	}
+	
+	
 		
 	// IDENTICAL TO handleNonBlockStorageRequest
 	public void handleLocalNonBlockStorageRequest(NonBlockStorageRequest request) throws IOException {
@@ -615,83 +654,7 @@ public class StorageNode implements RequestListener{
 		}
 	}
 	
-	/*
-	 * public HashGrid getGlobalGrid() { return this.globalGrid; }
-	 */
 	
-//	private class ParallelReader implements Runnable {
-//		private Block block;
-//		private TemporalFileSystem tfs;
-//		private String blockPath;
-//		
-//		public ParallelReader(TemporalFileSystem tfs, String blockPath){
-//			this.tfs = tfs;
-//			this.blockPath = blockPath;
-//		}
-//		
-//		public Block getBlock(){
-//			return this.block;
-//		}
-//		
-//		@Override
-//		public void run(){
-//			try {
-//				this.block = tfs.retrieveBlock(blockPath);
-//				if(blockPath.startsWith(resultsDir))
-//					new File(blockPath).delete();
-//			} catch (IOException | SerializationException e) {
-//				logger.log(Level.SEVERE, "Failed to retrieve the block", e);
-//			}
-//		}
-//	}
-//	
-//
-//	@EventHandler
-//	public void handleBlockRequest(BlockRequest blockRequest, EventContext context) {
-//		String fsName = blockRequest.getFilesystem();
-////		GeospatialFileSystem fs = fsMap.get(fsName);
-//		TemporalFileSystem fs = (TemporalFileSystem)fsMap.get(fsName);
-//		List<Block> blocks = new ArrayList<Block>();
-//		if (fs != null) {
-//			logger.log(Level.FINE, "Retrieving blocks " + blockRequest.getFilePaths() + " from filesystem " + fsName);
-//			try {
-//				List<String> blockPaths = blockRequest.getFilePaths();
-//				if(blockPaths.size() > 1){
-//					ExecutorService executor = Executors.newFixedThreadPool(Math.min(blockPaths.size(), 2 * numCores));
-//					List<ParallelReader> readers = new ArrayList<>();
-//					for(String blockPath : blockPaths){
-//						ParallelReader pr = new ParallelReader(fs, blockPath);
-//						readers.add(pr);
-//						executor.execute(pr);
-//					}
-//					executor.shutdown();
-//					executor.awaitTermination(10, TimeUnit.MINUTES);
-//					for(ParallelReader reader : readers)
-//						if(reader.getBlock() != null)
-//							blocks.add(reader.getBlock());
-//				} else {
-//					ParallelReader pr = new ParallelReader(fs, blockPaths.get(0));
-//					pr.run();
-//					blocks.add(pr.getBlock());
-//				}
-//				context.sendReply(new BlockResponse(blocks.toArray(new Block[blocks.size()])));
-//			} catch (IOException | InterruptedException e) {
-//				logger.log(Level.SEVERE, "Something went wrong while retrieving the block.", e);
-//				try {
-//					context.sendReply(new BlockResponse(new Block[]{}));
-//				} catch (IOException e1) {
-//					logger.log(Level.SEVERE, "Failed to send response to the original client", e1);
-//				}
-//			}
-//		} else {
-//			logger.log(Level.SEVERE, "Requested file system(" + fsName + ") not found. Returning empty content.");
-//			try {
-//				context.sendReply(new BlockResponse(new Block[]{}));
-//			} catch (IOException e) {
-//				logger.log(Level.SEVERE, "Failed to send response to the original client", e);
-//			}
-//		}
-//	}
 
 	/**
 	 * Handles a meta request that seeks information regarding the galileo
@@ -958,6 +921,7 @@ public class StorageNode implements RequestListener{
 	}
 	
 	
+	// QUERYING THE RIG GRAPH
 	@EventHandler
 	public void handleBlockQueryRequest(BlockQueryRequest event, EventContext context) {
 		
