@@ -15,6 +15,7 @@ import galileo.dataset.SpatialHint;
 import galileo.dataset.feature.Feature;
 import galileo.dataset.feature.FeatureType;
 import galileo.fs.FilesystemConfig;
+import galileo.fs.GeospatialFileSystem;
 import galileo.net.NetworkDestination;
 import galileo.util.GeoHash;
 import galileo.util.Pair;
@@ -33,7 +34,10 @@ public class prepareFS_Az {
 		// FEATURELIST IS PROBABLY NOT USED AT ALL
 		
 		featureList.add(new Pair<>("plotID", FeatureType.INT));
-		featureList.add(new Pair<>("date", FeatureType.STRING));
+		
+		featureList.add(new Pair<>(GeospatialFileSystem.TEMPORAL_YEAR_FEATURE, FeatureType.INT));
+		featureList.add(new Pair<>(GeospatialFileSystem.TEMPORAL_MONTH_FEATURE, FeatureType.INT));
+		featureList.add(new Pair<>(GeospatialFileSystem.TEMPORAL_DAY_FEATURE, FeatureType.INT));
 		
 		featureList.add(new Pair<>("sensorType", FeatureType.STRING));
 		

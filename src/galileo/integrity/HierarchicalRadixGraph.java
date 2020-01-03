@@ -186,6 +186,15 @@ public class HierarchicalRadixGraph<T> {
     // OPERATIONS ARE OR
     public void evaluateOperation(Operation operation, RIGQueryTracker<T> tracker, String lastFeature) {
     	synchronized(features) {
+    		
+    		/*tracker.nextLevel();
+    		for (RIGPath<Feature, T> path : tracker.getCurrentResults()) {
+            	// THE LEAFT VERTEX OF THE CURRENT PATH
+                RIGVertex<Feature, T> vertex = path.getTail();
+                
+                tracker.addResults(path, vertex.getAllNeighbors());
+            }*/
+    		
 	        for (String feature : features) {
 	        	
 	        	// INCREASING THE LEVEL
@@ -202,6 +211,8 @@ public class HierarchicalRadixGraph<T> {
 	            // LAST LEVEL ARE EXPANDED ON AND THE NEXT SET OF RESULTS ARE SET ON THE NEXT LEVEL
 	            /* Find all expressions related to the current Feature (operand) */
 	            List<Expression> expressions = operation.getOperand(feature);
+	            //System.out.println(tracker.getCurrentResults().size() +"  "+feature);
+	            
 	            if (expressions == null) {
 	                /* No expressions deal with the current feature.  Traverse all
 	                 * neighbors. */
@@ -215,6 +226,7 @@ public class HierarchicalRadixGraph<T> {
 	                /* Note that we are evaluating an Expression at this level */
 	                tracker.markEvaluated();
 	
+	                
 	                for (RIGPath<Feature, T> path : tracker.getCurrentResults()) {
 	                    RIGVertex<Feature, T> vertex = path.getTail();
 	                    
@@ -224,7 +236,7 @@ public class HierarchicalRadixGraph<T> {
 	                    	tracker.addResults(path, resultCollection);
 	                    else {
 	                    	tracker.addLastResults(path, resultCollection);
-	                    	return;
+	                    	//return;
 	                    }
 	                }
 	            }
@@ -481,10 +493,10 @@ public class HierarchicalRadixGraph<T> {
 		
 		// LEVEL TRAVERSAL, STARTING FROM BOTTOM TO TOP
 		for(int i = height; i > 0; i--) {
-			//List<String> currentLevel = new ArrayList<String>();
-			levelTraverser(root, i, levelToLabelMap, i);
-			//System.out.println(currentLevel);
-			//System.out.println("==================================");
+			int l = i;
+			if(l == 1)
+				System.out.println("Hi");
+			levelTraverser(root, l, levelToLabelMap, l);
 		}
 		
 	}

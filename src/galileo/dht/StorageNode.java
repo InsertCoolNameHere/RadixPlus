@@ -582,9 +582,13 @@ public class StorageNode implements RequestListener{
 					e.printStackTrace();
 				}
 				
+				
+				String pp = "";
 				for(String path: paths) {
 					gfs.addIRODSPendingPath(path);
+					pp+=path+"\n";
 				}
+				logger.info("RIKI: RIG PATHS DOWNLOADED: "+pp);
 				
 				gfs.updateRIG();
 			}
@@ -1180,7 +1184,6 @@ public class StorageNode implements RequestListener{
 				
 				
 				JSONArray filePaths = new JSONArray();
-				
 				
 				int totalBlocks = 0;
 				

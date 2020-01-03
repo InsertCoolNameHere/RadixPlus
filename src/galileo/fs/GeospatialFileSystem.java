@@ -146,9 +146,9 @@ public class GeospatialFileSystem extends FileSystem {
 	private Set<String> geohashIndex;
 	
 	
-	private static final String TEMPORAL_YEAR_FEATURE = "x__year__x";
-	private static final String TEMPORAL_MONTH_FEATURE = "x__month__x";
-	private static final String TEMPORAL_DAY_FEATURE = "x__day__x";
+	public static final String TEMPORAL_YEAR_FEATURE = "x__year__x";
+	public static final String TEMPORAL_MONTH_FEATURE = "x__month__x";
+	public static final String TEMPORAL_DAY_FEATURE = "x__day__x";
 	private static final String TEMPORAL_HOUR_FEATURE = "x__hour__x";
 	private static final String SPATIAL_FEATURE = "x__spatial__x";
 	
@@ -168,7 +168,8 @@ public class GeospatialFileSystem extends FileSystem {
 			HashTopologyException {
 		super(storageDirectory, name, ignoreIfPresent, "geospatial");
 		
-		rig = new RadixIntegrityGraph(TEMPORAL_YEAR_FEATURE+":1,"+TEMPORAL_MONTH_FEATURE+":1,"+TEMPORAL_DAY_FEATURE+":1,sensor:9", "/iplant/home/radix_subterra", name);
+		//rig = new RadixIntegrityGraph(TEMPORAL_YEAR_FEATURE+":1,"+TEMPORAL_MONTH_FEATURE+":1,"+TEMPORAL_DAY_FEATURE+":1,sensor:9", "/iplant/home/radix_subterra", name);
+		rig = new RadixIntegrityGraph(featureList, "/iplant/home/radix_subterra", name);
 		
 		//logger.info("RIKI: REACHED HERE2");
 		this.master = sn;

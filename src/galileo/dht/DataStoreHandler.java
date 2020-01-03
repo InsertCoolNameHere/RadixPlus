@@ -95,7 +95,8 @@ public class DataStoreHandler {
 	
 	public static String fsName = DataIngestor.fsName;
 	public static String sensorName = DataIngestor.fileSensorType;
-	public static final String IRODS_BASE_PATH = "/iplant/radix_subterra/plots/";
+	public static final String IRODS_BASE_PATH_WOSLASH = "/iplant/home/radix_subterra";
+	public static final String IRODS_BASE_PATH = "/iplant/home/radix_subterra";
 	
 	private BlockingQueue<StoreMessage> unProcessedMessages;
 	private ConcurrentHashMap<Integer, TimeStampedBuffer> plotIDToChunks;
@@ -185,16 +186,12 @@ public class DataStoreHandler {
 				logger.info("RIKI: IRODS ACTIVITY HAS STOPPED..READY TO UNLOAD PATHS");
 				
 				
-				for(String key : pathsPending.keySet()) {
-					List<String> paths = pathsPending.get(key);
+				for(String fname : pathsPending.keySet()) {
+					List<String> paths = pathsPending.get(fname);
 					
 					if(paths == null || paths.size() == 0)
 						continue;
 					
-					String fname = paths.get(0);
-					int fi = fname.indexOf("/");
-					
-					fname = fname.substring(0, fi);
 					
 					StringBuffer sb = new StringBuffer("");
 					
@@ -282,7 +279,7 @@ public class DataStoreHandler {
 						}
 					}
 				}
-		}, (irodsCheckTimeSecs+10)*1000, irodsCheckTimeSecs*1000); //300 seconds = 5 minutes
+		}, (irodsCheckTimeSecs)*1000, irodsCheckTimeSecs*1000); //300 seconds = 5 minutes
 		
 		unProcessedMessages = new PriorityBlockingQueue<>();
 		plotIDToChunks = new ConcurrentHashMap<>(100, .9f, 10);
@@ -438,6 +435,7 @@ public class DataStoreHandler {
 				
 				if(plotID < 0)
 					continue;
+				
 				//First ensure that this point in fact belongs on this node
 				NodeInfo dest = ((SpatialHierarchyPartitioner)gfs.getPartitioner()).locateHashVal(GeoHash.encode(coords, grid.getPrecision()));
 				
@@ -641,13 +639,13 @@ public class DataStoreHandler {
 				logger.info("RIKI: COULD HAVE SENT TO IRODS, BUT DIDNT");
 				
 				//Send off to IRODS
-				if (msg.getPlotID() > 0) {
+				/*if (msg.getPlotID() > 0) {
 					try {
 						subterra.writeRemoteFile(localPlotData, this);
 					} catch (JargonException e1) {
 						logger.severe("RIKI: IRODS SENDING ENCOUNTERED "+ e1);
 					}
-				}
+				}*/
 				
 				lastIRODSInsertionTime = System.currentTimeMillis();
 				
@@ -663,8 +661,9 @@ public class DataStoreHandler {
 						pathsPending.put(fsName,pPaths);
 					else { 
 						pPaths = pathsPending.get(fsName);
-						pPaths.add(IRODS_BASE_PATH+actPath+"$$"+ a1.getValue());
 					}
+					pPaths.add(IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ a1.getValue());
+					logger.info("RIKI: IRODS PATH FOR RIG: "+IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ a1.getValue());
 				}
 				
 				
@@ -966,13 +965,13 @@ public class DataStoreHandler {
 					lastTime ++;// a hack to get around data chunks with only one item (add 1ms to end time)
 				meta.setTemporalProperties(new TemporalProperties(firstTime, lastTime));
 				
-				FeatureSet attributes = createAttributes_Arizona(data, indices, sensorType, summary, plotID, year+"-"+month+"-"+dayOfMonth);
+				FeatureSet attributes = createAttributes_Arizona(data, indices, sensorType, summary, plotID, year,month,dayOfMonth);
 				
 				meta.setAttributes(attributes);
 				return meta;
 				
 			} else {
-				
+				// THIS IS THE CASE OF ARIZONA
 				
 				SimpleDateFormat formatter = new SimpleDateFormat("EEE MMM dd kk:mm:ss.SSS z yyyy");//need to change if timestamp format changes
 				Date parsedDate = formatter.parse(first_timestamp);
@@ -993,7 +992,7 @@ public class DataStoreHandler {
 					lastTime ++;// a hack to get around data chunks with only one item (add 1ms to end time)
 				meta.setTemporalProperties(new TemporalProperties(firstTime, lastTime));
 				
-				FeatureSet attributes = createAttributes_Arizona(data, indices, sensorType, summary, plotID, year+"-"+month+"-"+dayOfMonth);
+				FeatureSet attributes = createAttributes_Arizona(data, indices, sensorType, summary, plotID, year,month,dayOfMonth);
 				
 				meta.setAttributes(attributes);
 				return meta;
@@ -1086,7 +1085,8 @@ public class DataStoreHandler {
 			
 		}
 		
-		private FeatureSet createAttributes_Arizona(String data, int[] indices, String sensorType, SummaryStatistics summary, int plotID, String date) {
+		private FeatureSet createAttributes_Arizona(String data, int[] indices, String sensorType, SummaryStatistics summary, int plotID, 
+				int year,int month,int dayOfMonth) {
 			
 			int dataIndex = indices[3];
 			
@@ -1095,7 +1095,9 @@ public class DataStoreHandler {
 			
 			
 			attributes.put(new Feature("plotID", plotID));
-			attributes.put(new Feature("date", date));
+			attributes.put(new Feature(GeospatialFileSystem.TEMPORAL_YEAR_FEATURE, year));
+			attributes.put(new Feature(GeospatialFileSystem.TEMPORAL_MONTH_FEATURE, month));
+			attributes.put(new Feature(GeospatialFileSystem.TEMPORAL_DAY_FEATURE, dayOfMonth));
 			attributes.put(new Feature("sensorType", sensorType));
 			
 			// SENSOR READINGS

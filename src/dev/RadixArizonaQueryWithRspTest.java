@@ -24,6 +24,7 @@ import galileo.dataset.feature.Feature;
 import galileo.event.BasicEventWrapper;
 import galileo.event.Event;
 import galileo.event.EventWrapper;
+import galileo.fs.GeospatialFileSystem;
 import galileo.net.ClientMessageRouter;
 import galileo.net.GalileoMessage;
 import galileo.net.MessageListener;
@@ -160,12 +161,16 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 		
 		QueryRequest qr = new QueryRequest("roots-arizona", cl);
 		qr.setSensorName("irt");
+		qr.setTime("2018-9-28");
 		
-		Query q = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("date", "2018-9-28"))));
+		// THE QUERY FOR
+		
+		//Query q = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("date", "2018-9-28"))));
 		Query q1 = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("sensorType", "irt"))));
 		
-		Query allQ = queryIntersection(q,q1);
-		qr.setMetdataQuery(allQ);
+		//Query allQ = queryIntersection(q,q1);
+		
+		qr.setMetdataQuery(q1);
 		return qr;
 	}
 

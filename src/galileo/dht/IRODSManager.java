@@ -97,8 +97,11 @@ public class IRODSManager {
 	public void writeRemoteData(String data, String irodspath) {
 		try {
 			
+			logger.info("RIKI: ARGUMENTS: "+irodspath);
+			logger.info("RIKI: DATA: "+data);
 			String fileName = irodspath.substring(irodspath.lastIndexOf("/")+1);
 			
+			logger.info("RIKI: FILENAME: "+fileName);
 			File temp = File.createTempFile(fileName, ".txt");
 
 			if (!temp.exists())
@@ -134,7 +137,7 @@ public class IRODSManager {
 		tcb.setMaximumErrorsBeforeCanceling(10);
 		tcb.setTotalBytesToTransfer(toExport.length());
 		
-		
+		logger.info("RIKI: RDIR: "+remoteDirectory);
 		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
 		
 		logger.info("RIKI: RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
@@ -316,6 +319,8 @@ public class IRODSManager {
 		
 		
 		String[] paths = sb.toString().split("\\n");
+		
+		System.out.println(paths[0]);
 		//System.out.println("FINISHED FETCHING "+sb.toString());
 		return paths;
 		
@@ -325,7 +330,7 @@ public class IRODSManager {
 	public static void main(String arg[]) throws JargonException, IOException {
 		
 		IRODSManager im = new IRODSManager();
-		im.readAllRemoteFiles("ik");
+		im.readAllRemoteFiles("roots-arizona");
 	}
 	
 	

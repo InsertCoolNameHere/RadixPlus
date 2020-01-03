@@ -27,7 +27,7 @@ public class RadixIntegrityGraph {
 	
 	public RadixIntegrityGraph() {}
 	
-	
+	public static String ROOT_LABEL = "X_root_X";
 	private String rootPath = "";
 	
 	// LIST OF PRE-DEFINED GRAPH'S NODENAMES AND TYPES
@@ -78,7 +78,7 @@ public class RadixIntegrityGraph {
 		
 		hrig = new HierarchicalRadixGraph<>(this.featureList);
 		hrig.getRoot().path = this.rootPath;
-		hrig.getRoot().setLabel(new Feature("root",this.rootPath));
+		hrig.getRoot().setLabel(new Feature(ROOT_LABEL,ROOT_LABEL));
 		
 		
 	}
@@ -94,7 +94,7 @@ public class RadixIntegrityGraph {
 		for(int i=0; i <= this.featureList.size(); i++) {
 			levelToLabelMap.add(i, new TreeSet<String>());
 		}
-		levelToLabelMap.get(0).add("root");
+		levelToLabelMap.get(0).add(ROOT_LABEL);
 		
 		int height = 0;
 		
@@ -214,7 +214,10 @@ public class RadixIntegrityGraph {
 			String p = "";
 			int k = 0;
 			for(String s: ss) {
-				if(k == 0|| k == ss.length-1) {
+				
+				if("X_root_X".equals(s)) {
+					p+=rootPath;
+				} else if(k == 0|| k == ss.length-1) {
 					p+=s;
 				} else if(k == ss.length-2) {
 					p+=s+"$$";
