@@ -43,6 +43,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
 
+import org.apache.commons.io.FileUtils;
 import org.irods.jargon.core.connection.IRODSAccount;
 import org.irods.jargon.core.exception.DataNotFoundException;
 import org.irods.jargon.core.exception.DuplicateDataException;
@@ -71,7 +72,7 @@ public class IRODSManager {
 	private IRODSFileFactory fileFactory;
 	private DataTransferOperations dataTransferOperationsAO;
 	
-	String IRODS_BASE = "/iplant/home/radix_subterra";
+	public static String IRODS_BASE = "/iplant/home/radix_subterra";
 	
 	
 	public IRODSManager() {	//davos.cyverse.org
@@ -183,13 +184,13 @@ public class IRODSManager {
 		// PATH USED TO LOOK LIKE /iplant/home/radix_subterra/plots/970/2018/12.../xyz.gblock
 		// NOW: 
 		
-		String remoteDirectory = "plots" + toExport.getAbsolutePath().replaceAll(SystemConfig.getRootDir(), "");
-		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
-		logger.info("remoteDirectory string: " + remoteDirectory);
+		String remoteDirectory = toExport.getAbsolutePath().replaceAll(SystemConfig.getRootDir(), "");
+		remoteDirectory = remoteDirectory.substring(1, remoteDirectory.lastIndexOf("/"));
+		//logger.info("remoteDirectory string: " + remoteDirectory);
 		IRODSFile remoteDir = null;
 		try {
 			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
-			logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
+			logger.info("RIKI: WRITE OUT " + remoteDirectory+ "<<"+ toExport.getAbsolutePath());
 			try {
 				remoteDir.mkdirs();
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
@@ -199,6 +200,7 @@ public class IRODSManager {
 			}//shouldn't need to catch overwrite exceptions now...
 			catch(DataNotFoundException e) {
 				//stupid IRODS... directory was not created properly, so create it again and retry
+				logger.info("UnixFileCreateException caught, trying again.");
 				remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
 				remoteDir.mkdirs();
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
@@ -250,7 +252,7 @@ public class IRODSManager {
 		}
 		finally {
 //			fileWriter.close();
-			toExport.delete();
+			//toExport.delete();
 		}
 		
 	}
@@ -291,8 +293,12 @@ public class IRODSManager {
 		};
 		
 		File temp = new File("/tmp/sampleData");
-		if (!temp.exists())
-			temp.mkdirs();
+		
+		if(temp.exists())
+			FileUtils.deleteDirectory(temp);
+		
+		temp.mkdirs();
+		
 		//IRODSFile remoteFile = fileFactory.instanceIRODSFile("plots/");
 		IRODSFile toFetch = fileFactory.instanceIRODSFile(fsName+"/rig");
 		//IRODSFile toFetch = fileFactory.instanceIRODSFile("util/me");
@@ -315,14 +321,64 @@ public class IRODSManager {
 			sb.append(remoteContents);
 		}
 		
-		temp.delete();
+		FileUtils.deleteDirectory(temp);
 		
-		
+		logger.info("RIKI: PATHS READ: "+sb.toString());
 		String[] paths = sb.toString().split("\\n");
 		
-		System.out.println(paths[0]);
-		//System.out.println("FINISHED FETCHING "+sb.toString());
 		return paths;
+		
+	}
+	
+	/**
+	 * DOWNLOAD A FULL DIRECTORY FROM IRODS
+	 * @author sapmitra
+	 * @throws JargonException
+	 * @throws IOException
+	 */
+	public void readRemoteDirectory(String whereToPut, String whatToDownload) throws JargonException, IOException {
+
+		TransferOptions opts = new TransferOptions();
+		//opts.setComputeAndVerifyChecksumAfterTransfer(true);
+		opts.setIntraFileStatusCallbacks(true);
+		TransferControlBlock tcb = DefaultTransferControlBlock.instance();
+		tcb.setTransferOptions(opts);
+		
+		TransferStatusCallbackListener tscl = new TransferStatusCallbackListener() {
+			@Override
+			public FileStatusCallbackResponse statusCallback(TransferStatus transferStatus) {
+				return FileStatusCallbackResponse.CONTINUE;
+			}
+
+			@Override
+			public void overallStatusCallback(TransferStatus transferStatus) {
+			}
+
+			@Override
+			public CallbackResponse transferAsksWhetherToForceOperation(String irodsAbsolutePath,
+					boolean isCollection) {
+				return CallbackResponse.YES_FOR_ALL;
+			}
+		};
+		
+		String sufixDir = whatToDownload.replace(IRODS_BASE, "");
+		
+		File temp = new File(whereToPut+sufixDir);
+		
+		if (!temp.exists())
+			temp.mkdirs();
+		//IRODSFile remoteFile = fileFactory.instanceIRODSFile("plots/");
+		IRODSFile toFetch = fileFactory.instanceIRODSFile(whatToDownload);
+		while (!toFetch.exists()) {
+			try {
+				System.out.println("THE PATH YOU ARE TRYING TO DOWNLOAD DIES NOT EXIST");
+				Thread.sleep(100);
+			} catch (InterruptedException e1) {
+				e1.printStackTrace();
+			}
+		}
+		
+		dataTransferOperationsAO.getOperation(toFetch, temp, tscl, tcb);
 		
 	}
 	
@@ -330,7 +386,9 @@ public class IRODSManager {
 	public static void main(String arg[]) throws JargonException, IOException {
 		
 		IRODSManager im = new IRODSManager();
-		im.readAllRemoteFiles("roots-arizona");
+		String[] readAllRemoteFiles = im.readAllRemoteFiles("roots-arizona");
+		
+		System.out.println(readAllRemoteFiles.length);
 	}
 	
 	

@@ -139,6 +139,7 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 	private static Event createPolygonRequest() {
 		//33.061982, -111.970253
 		//(40.65319061279297, -104.9959945678711), (40.653018951416016, -104.99565124511719)
+		//(33.06200408935547, -111.96910095214844), (33.06132125854492, -111.96910095214844), (33.06132125854492, -111.96965026855469), (33.06200408935547, -111.96965026855469)
 		float lat1 = 33.061851f;
 		float lat2 = 33.061588f;
 		//33.060944, -111.970672
@@ -161,16 +162,16 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 		
 		QueryRequest qr = new QueryRequest("roots-arizona", cl);
 		qr.setSensorName("irt");
-		qr.setTime("2018-9-28");
+		qr.setTime("2018-09-28-xx");
 		
 		// THE QUERY FOR
 		
 		//Query q = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("date", "2018-9-28"))));
-		Query q1 = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("sensorType", "irt"))));
+		//Query q1 = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("sensorType", "irt"))));
 		
 		//Query allQ = queryIntersection(q,q1);
 		
-		qr.setMetdataQuery(q1);
+		//qr.setMetdataQuery(q1);
 		return qr;
 	}
 

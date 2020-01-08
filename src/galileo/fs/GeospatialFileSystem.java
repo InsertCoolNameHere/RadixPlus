@@ -747,16 +747,16 @@ public class GeospatialFileSystem extends FileSystem {
 				Feature feature = null;
 				switch (i) {
 				case 0:
-					feature = new Feature(TEMPORAL_YEAR_FEATURE, temporalFeature);
+					feature = new Feature(TEMPORAL_YEAR_FEATURE, Integer.valueOf(temporalFeature));
 					break;
 				case 1:
-					feature = new Feature(TEMPORAL_MONTH_FEATURE, temporalFeature);
+					feature = new Feature(TEMPORAL_MONTH_FEATURE, Integer.valueOf(temporalFeature));
 					break;
 				case 2:
-					feature = new Feature(TEMPORAL_DAY_FEATURE, temporalFeature);
+					feature = new Feature(TEMPORAL_DAY_FEATURE, Integer.valueOf(temporalFeature));
 					break;
 				case 3:
-					feature = new Feature(TEMPORAL_HOUR_FEATURE, temporalFeature);
+					feature = new Feature(TEMPORAL_HOUR_FEATURE, Integer.valueOf(temporalFeature));
 					break;
 				}
 				temporalExpressions.add(new Expression(Operator.EQUAL, feature));

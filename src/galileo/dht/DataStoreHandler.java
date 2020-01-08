@@ -639,13 +639,13 @@ public class DataStoreHandler {
 				logger.info("RIKI: COULD HAVE SENT TO IRODS, BUT DIDNT");
 				
 				//Send off to IRODS
-				/*if (msg.getPlotID() > 0) {
+				if (msg.getPlotID() > 0) {
 					try {
 						subterra.writeRemoteFile(localPlotData, this);
 					} catch (JargonException e1) {
 						logger.severe("RIKI: IRODS SENDING ENCOUNTERED "+ e1);
 					}
-				}*/
+				}
 				
 				lastIRODSInsertionTime = System.currentTimeMillis();
 				

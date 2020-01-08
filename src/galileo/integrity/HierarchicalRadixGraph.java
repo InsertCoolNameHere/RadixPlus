@@ -494,8 +494,7 @@ public class HierarchicalRadixGraph<T> {
 		// LEVEL TRAVERSAL, STARTING FROM BOTTOM TO TOP
 		for(int i = height; i > 0; i--) {
 			int l = i;
-			if(l == 1)
-				System.out.println("Hi");
+			
 			levelTraverser(root, l, levelToLabelMap, l);
 		}
 		

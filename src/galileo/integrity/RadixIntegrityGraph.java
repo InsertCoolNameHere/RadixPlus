@@ -28,7 +28,7 @@ public class RadixIntegrityGraph {
 	public RadixIntegrityGraph() {}
 	
 	public static String ROOT_LABEL = "X_root_X";
-	private String rootPath = "";
+	public String rootPath = "";
 	
 	// LIST OF PRE-DEFINED GRAPH'S NODENAMES AND TYPES
 	private List<Pair<String, FeatureType>> featureList;
@@ -45,6 +45,7 @@ public class RadixIntegrityGraph {
 	
 	public void addPath(String irodsPath) {
 		
+		//logger.info("RIKI: HHH "+irodsPath+" "+ rootPath);
 		if(irodsPath.startsWith(rootPath)) {
 			String tmp = irodsPath.substring(rootPath.length());
 			addToPendingPath(tmp.split(rigPathSeparator));

@@ -978,8 +978,7 @@ public class StorageNode implements RequestListener{
 			QueryResponse response = new QueryResponse(queryId, gfs.getFeaturesRepresentation(), new JSONObject());
 			Metadata data = new Metadata();
 			
-			// IN ROOTS QUERIES, NO TIME IS BEING SENT SO FAR
-			if (request.isTemporal()) {
+			/*if (request.isTemporal()) {
 				String[] timeSplit = request.getTime().split("-");
 				int timeIndex = Arrays.asList(TemporalType.values()).indexOf(gfs.getTemporalType());
 				if (!timeSplit[timeIndex].contains("x")) {
@@ -996,8 +995,9 @@ public class StorageNode implements RequestListener{
 					c.set(year, month, day, hour, 0);
 					data.setTemporalProperties(new TemporalProperties(c.getTimeInMillis()));
 				}
-			}
-			// THE PLOTS JUST SENDS SPATIAL PROPERTY, NOT TEMPORAL PROPERTY
+			}*/
+			
+			// THE TEMPORAL PROPERTY IS NOT EMBEDDED IN METADATA BECAUSE THE NODES ARE PARTITIONED SPATIALLY
 			if (request.isSpatial()) {
 				logger.log(Level.INFO, "Spatial query: {0}", request.getPolygon());
 				data.setSpatialProperties(new SpatialProperties(new SpatialRange(request.getPolygon())));
@@ -1008,22 +1008,25 @@ public class StorageNode implements RequestListener{
 			try {
 				nodes = partitioner.findDestinations(data);
 				logger.info("destinations: " + nodes);
-				QueryEvent qEvent = (request.hasFeatureQuery() || request.hasMetadataQuery())
+				
+				/*QueryEvent qEvent = (request.hasFeatureQuery() || request.hasMetadataQuery())
 						? new QueryEvent(queryId, request.getFilesystemName(), request.getFeatureQuery(),
 								request.getMetadataQuery())
 						: (request.isSpatial())
 								? new QueryEvent(queryId, request.getFilesystemName(), request.getPolygon())
-								: new QueryEvent(queryId, request.getFilesystemName(), request.getTime());
+								: new QueryEvent(queryId, request.getFilesystemName(), request.getTime());*/
+								
+				QueryEvent qEvent = new QueryEvent(queryId, request.getFilesystemName(), request.getPolygon());
 							
 				qEvent.setSensorName(request.getSensorName());
 				
-				if (request.isDryRun()) {
+				/*if (request.isDryRun()) {
 					qEvent.enableDryRun();
 					response.setDryRun(true);
 				}
 				if (request.isSpatial()) {
 					qEvent.setPolygon(request.getPolygon());
-				}
+				}*/
 				if (request.isTemporal())
 					qEvent.setTime(request.getTime());
 
@@ -1125,10 +1128,9 @@ public class StorageNode implements RequestListener{
 		JSONArray resultsJSON = new JSONArray();
 		long processingTime = System.currentTimeMillis();
 		try {
-			logger.info(event.getFeatureQueryString());
-			logger.info(event.getMetadataQueryString());
-			logger.info("RIKI: QUERY SENSOR:"+event.getSensorName());
-			
+			//logger.info(event.getFeatureQueryString());
+			//logger.info(event.getMetadataQueryString());
+			//logger.info("RIKI: QUERY SENSOR:"+event.getSensorName());
 			
 			String fsName = event.getFilesystemName();
 			GeospatialFileSystem fs = (GeospatialFileSystem) fsMap.get(fsName);//always roots
@@ -1142,6 +1144,7 @@ public class StorageNode implements RequestListener{
 				// THIS IS THE CASE OF ONLY METADATA AND SUMMARY BEING REQUESTED AND NOT ACTUAL DATA
 				JSONArray plotSummaries = new JSONArray();
 				
+				// POLGON FRONT-END QUERY IS NOT DRY RUN
 				// ==========================DRY START====================================
 				if (event.isDryRun()) {
 					
@@ -1195,13 +1198,15 @@ public class StorageNode implements RequestListener{
 					for(String block : blocks){
 						
 						if("roots-arizona".equals(fsName)) {
+							
+							logger.info("RIKI: DEALING WITH "+block);
 							// ARIZONA PLOT DATA IS ACTUALLY STORED IN THE BLOCKS
 							// WE JUST RETURN THE BLOCK PATH ALONG WITH THE METADATA ASSOSSIATED WITH IT
 							// SPLIT BECAUSE IRODS PATH IS ALSO STORED SEPARATED BY $$
 							String tokens[] = block.split("\\$\\$");
 							String summaryString = fs.getSummaryDataString(tokens[0]);
 							
-							//logger.info("RIKI: SUMMARY STRING: "+ summaryString);
+							logger.info("RIKI: SUMMARY STRING: "+ summaryString);
 							
 							// RETURNING BOTH THE GALILEO AND IRODS PATH
 							//filePaths.put(block+"$$"+irodsBlockPath);
