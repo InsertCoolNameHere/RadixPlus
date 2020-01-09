@@ -74,6 +74,9 @@ public class IRODSManager {
 	
 	public static String IRODS_BASE = "/iplant/home/radix_subterra";
 	
+	public static String IRODS_SEPARATOR = "/";
+	public static String GALILEO_SEPARATOR = File.separator;
+	
 	
 	public IRODSManager() {	//davos.cyverse.org
 		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home/radix_subterra", "iplant", "");
@@ -390,7 +393,6 @@ public class IRODSManager {
 		
 		System.out.println(readAllRemoteFiles.length);
 	}
-	
 	
 	
 }

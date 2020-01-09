@@ -1,6 +1,16 @@
 package galileo.integrity;
 
 import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.FileSystem;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Paths;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+import java.nio.file.WatchEvent.Kind;
+import java.nio.file.WatchEvent.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -10,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Logger;
+import java.util.zip.Adler32;
 
 import galileo.dataset.Metadata;
 import galileo.dataset.feature.Feature;
@@ -75,6 +86,25 @@ public class RadixIntegrityGraph {
 			/* Cannot modify featurelist anymore */
 			this.featureList = Collections.unmodifiableList(this.featureList);
 			
+		}
+		
+		hrig = new HierarchicalRadixGraph<>(this.featureList);
+		hrig.getRoot().path = this.rootPath;
+		hrig.getRoot().setLabel(new Feature(ROOT_LABEL,ROOT_LABEL));
+		
+		
+	}
+	
+	
+	public RadixIntegrityGraph(List<Pair<String, FeatureType>> featureList, String rootPath, String fsName) {
+		
+		pendingPaths = new ArrayList<String[]>();
+		
+		//this.rootPath = rootPath+rigPathSeparator+fsName+rigPathSeparator;
+		this.rootPath = rootPath+rigPathSeparator;
+		
+		if (featureList != null) {
+			this.featureList = Collections.unmodifiableList(featureList);
 		}
 		
 		hrig = new HierarchicalRadixGraph<>(this.featureList);
@@ -237,6 +267,42 @@ public class RadixIntegrityGraph {
 	public static String getHashFromPayload(String ph) {
 		String tokens[] = ph.split("\\$\\$");
 		return tokens[1];
+	}
+	
+	
+	/**
+	 * GIVEN A FILE, GET ITS CHECKSUM
+	 * @param filePath
+	 * @return
+	 * @throws IOException
+	 */
+	public static long getChecksumFromFilepath(String filePath) throws IOException {
+		
+		Adler32 crc = new Adler32();
+		
+		byte[] bytesF = Files.readAllBytes(Paths.get(filePath));
+		
+		crc.update(bytesF);
+		
+		return crc.getValue();
+	}
+	
+	/**
+	 * GIVEN A STRING, GET ITS CHECKSUM
+	 * @param fileData
+	 * @return
+	 * @throws IOException
+	 */
+	
+	public static long getChecksumFromData(String fileData) throws IOException {
+		
+		Adler32 crc = new Adler32();
+		
+		byte[] bytesF = fileData.getBytes();
+		
+		crc.update(bytesF);
+		
+		return crc.getValue();
 	}
 	
 	/**

@@ -87,6 +87,7 @@ import galileo.event.Event;
 import galileo.fs.FileSystemException;
 import galileo.fs.GeospatialFileSystem;
 import galileo.graph.SummaryStatistics;
+import galileo.integrity.RadixIntegrityGraph;
 import galileo.net.NetworkDestination;
 import galileo.util.GeoHash;
 import sun.management.Sensor;
@@ -649,8 +650,10 @@ public class DataStoreHandler {
 				
 				lastIRODSInsertionTime = System.currentTimeMillis();
 				
-				Adler32 a1 = new Adler32();
-				a1.update(sortedPlotData.getBytes());
+				long crcVal = RadixIntegrityGraph.getChecksumFromData(sortedPlotData);
+				/*Adler32 a1 = new Adler32();
+				a1.update(sortedPlotData.getBytes());*/
+				
 				String actPath = localPlotData.getAbsolutePath().replaceAll(SystemConfig.getRootDir(),"");
 				
 				List<String> pPaths = new ArrayList<String>();
@@ -662,8 +665,8 @@ public class DataStoreHandler {
 					else { 
 						pPaths = pathsPending.get(fsName);
 					}
-					pPaths.add(IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ a1.getValue());
-					logger.info("RIKI: IRODS PATH FOR RIG: "+IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ a1.getValue());
+					pPaths.add(IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
+					logger.info("RIKI: IRODS PATH FOR RIG: "+IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
 				}
 				
 				
