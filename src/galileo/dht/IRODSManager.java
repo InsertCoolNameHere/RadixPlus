@@ -105,7 +105,7 @@ public class IRODSManager {
 			//logger.info("RIKI: DATA: "+data);
 			String fileName = irodspath.substring(irodspath.lastIndexOf("/")+1);
 			
-			logger.info("RIKI: FILENAME: "+fileName);
+			//logger.info("RIKI: FILENAME: "+fileName);
 			File temp = File.createTempFile(fileName, ".txt");
 
 			if (!temp.exists())
@@ -148,7 +148,7 @@ public class IRODSManager {
 		IRODSFile remoteDir = null;
 		try {
 			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
-			logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
+			//logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
 			try {
 				remoteDir.mkdirs();
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
@@ -326,8 +326,8 @@ public class IRODSManager {
 		
 		FileUtils.deleteDirectory(temp);
 		
-		logger.info("RIKI: PATHS READ: "+sb.toString());
 		String[] paths = sb.toString().split("\\n");
+		logger.info("RIKI: PATHS READ: " + paths.length);
 		
 		return paths;
 		

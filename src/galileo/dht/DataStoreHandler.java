@@ -666,7 +666,7 @@ public class DataStoreHandler {
 						pPaths = pathsPending.get(fsName);
 					}
 					pPaths.add(IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
-					logger.info("RIKI: IRODS PATH FOR RIG: "+IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
+					//logger.info("RIKI: IRODS PATH FOR RIG: "+IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
 				}
 				
 				

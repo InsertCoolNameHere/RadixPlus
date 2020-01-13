@@ -89,6 +89,7 @@ public class prepareFS_Az {
 		fsc.setHashGridPrecision(11);
 		
 		// SET INDICES MAP
+		//THE INDICES AT WHICH ALL NECESSARY FIELDS MAY BE FOUND IN THE DATASET
 		Map<String, int[]> indMap = new HashMap<String, int[]>();
 		int[] irts = {2,3,0,5};
 		indMap.put("irt", irts);

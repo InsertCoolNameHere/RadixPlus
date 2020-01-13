@@ -142,11 +142,11 @@ public class IRODSDataManager {
 		tcb.setTotalBytesToTransfer(toExport.length());
 		String remoteDirectory = "plots" + toExport.getAbsolutePath().replaceAll(SystemConfig.getRootDir(), "").replaceAll("/dailyTemp", "");
 		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
-		logger.info("remoteDirectory string: " + remoteDirectory);
+		//logger.info("remoteDirectory string: " + remoteDirectory);
 		IRODSFile remoteDir = null;
 		try {
 			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
-			logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
+			//logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
 			try {
 				remoteDir.mkdirs();
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);

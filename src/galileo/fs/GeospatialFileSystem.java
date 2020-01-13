@@ -277,6 +277,10 @@ public class GeospatialFileSystem extends FileSystem {
 	}
 	
 	
+	/**
+	 * HANDLES UPDATE OF THE RIG GRAPH FOR A GIVEN FILESYSTEM
+	 * @throws IOException
+	 */
 	public void updateFS_RIG() throws IOException {
 	
 		IRODSManager subterra = new IRODSManager();
@@ -298,6 +302,8 @@ public class GeospatialFileSystem extends FileSystem {
 			logger.info("RIKI: RIG PATHS DOWNLOADED: "+pp);
 			
 			updateRIG();
+			
+			logger.info("RIKI: RIG UPDATE COMPLETE.");
 		}
 		
 	}
@@ -1009,7 +1015,7 @@ public class GeospatialFileSystem extends FileSystem {
 			}
 		}
 		
-		logger.info("RIKI: OVERLAPPING RIG PLOTS FOUND: "+ overlappingPlots);
+		logger.info("RIKI: TOTAL OVERLAPPING RIG PLOTS FOUND: "+ overlappingPlots.size());
 		
 		/* Operations: OR; Expressions: AND. So create your operations accordingly */
 		
@@ -1088,7 +1094,7 @@ public class GeospatialFileSystem extends FileSystem {
 			paths = metadataGraph.evaluateQuery(queryIntersection(query, metaQuery));
 		} else */if (spatialProperties != null) {
 			// THIS IS WHERE POLYGON QUERY ENTERS
-			logger.info("RIKI: PERFORMING SPATIAL QUERY");
+			//logger.info("RIKI: PERFORMING SPATIAL QUERY");
 			
 			List<Expression> temporalExpression = null;
 			if(temporalProperties != null) {
@@ -1100,7 +1106,7 @@ public class GeospatialFileSystem extends FileSystem {
 					: sp.getSpatialRange().getBounds();
 			space = getSpatialString(sp);
 			
-			logger.info("QUERY POLYGON: "+ geometry);
+			logger.info("RIKI: SPATIAL QUERY POLYGON: "+ geometry);
 			
 			List<String> hashLocations = new ArrayList<>(Arrays.asList(GeoHash.getIntersectingGeohashes(geometry, Partitioner.SPATIAL_PRECISION+2)));
 			
