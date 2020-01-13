@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.zip.Adler32;
 
 import org.apache.commons.lang.Validate;
+import org.irods.jargon.core.exception.JargonException;
 
 import galileo.dataset.feature.FeatureType;
 import galileo.dht.IRODSManager;
@@ -33,6 +34,8 @@ public class VerifyPathsNDirectories {
 	
 	public String separator = File.separator;
 	
+	public IRODSManager irm = new IRODSManager();
+	
 	// COMPLETE FEATURE LIST
 	private List<Pair<String, FeatureType>> featureList = populateFeatures();
 	
@@ -49,7 +52,7 @@ public class VerifyPathsNDirectories {
 	// ================CONFIG START=====================
 	
 	
-	public boolean validatePaths(String pathStr) throws IOException {
+	public boolean validatePaths(String pathStr, boolean toDownload) throws IOException {
 		
 		String[] tokens = pathStr.split("\\$\\$");
 		
@@ -57,7 +60,7 @@ public class VerifyPathsNDirectories {
 		String filePath = tokens[0];
 		
 		
-		if(checkSum == getFileCRC(filePath)) {
+		if(checkSum == getFileCRC(filePath, toDownload)) {
 			return true;
 		} else {
 			return false;
@@ -77,12 +80,39 @@ public class VerifyPathsNDirectories {
 		long checkVal = Long.valueOf(tokens[1]);
 		fullIrodsDirPath = tokens[0];
 		
+		// DOWNLOADING THE DIRECTORY FIRST
+		try {
+			irm.readRemoteDirectory_validation(fsBase, fullIrodsDirPath);
+		} catch (JargonException e) {
+			e.printStackTrace();
+		}
+		
+		
 		String irodsBaseForThisFS = irodsBase+IRODSManager.IRODS_SEPARATOR+fsName;
 		String relativePath = fullIrodsDirPath.substring(irodsBaseForThisFS.length());
-		String fullGalileoDirPath = fsBase+relativePath.replace(IRODSManager.IRODS_SEPARATOR, IRODSManager.GALILEO_SEPARATOR);
+		String fullGalileoDirPath = fsBase+File.separator+fsName+
+				relativePath.replace(IRODSManager.IRODS_SEPARATOR, IRODSManager.GALILEO_SEPARATOR);
 		
 		int numFeatures = getNumFeatures(relativePath);
 		List<Pair<String, FeatureType>> relFeatures = getRelevantFeatures(numFeatures);
+		
+		if(relFeatures == null || relFeatures.size() == 0) {
+			// THIS IS THE SENSOR DIRECTORY
+			// ITS HAS ONE FILE, GET ITS CRC, THAT'S ENOUGH
+			String tok[] = relativePath.split(IRODSManager.IRODS_SEPARATOR);
+			//int ln = tok.length;
+			String fname = "";
+			for(int i=1; i<= numFeatures; i++) {
+				if(i==numFeatures) {
+					fname+=tok[i]+".gblock";
+					continue;
+				}
+				fname+=tok[i]+"-";
+			}
+			 
+			//String fname = tok[ln-5]+"-"+tok[ln-4]+"-"+tok[ln-3]+"-"+tok[ln-2]+"-"+tok[ln-1]+".gblock";
+			return validatePaths(fullIrodsDirPath+IRODSManager.IRODS_SEPARATOR+fname+"$$"+checkVal, false);
+		}
 		
 		List<String> paths = listFileTree(new File(fullGalileoDirPath));
 		
@@ -92,7 +122,7 @@ public class VerifyPathsNDirectories {
 		for(String p : paths) {
 			
 			p = p.substring(fsBase.length());
-			System.out.println(p);
+			//System.out.println(p);
 			
 			rig.addPath(irodsBase+p.replace(IRODSManager.GALILEO_SEPARATOR, IRODSManager.IRODS_SEPARATOR));
 		}
@@ -152,9 +182,19 @@ public class VerifyPathsNDirectories {
 	 
 	
 	
-	public long getFileCRC(String suffixPath) throws IOException {
+	public long getFileCRC(String suffixPath, boolean toDownload) throws IOException {
 		long crc = -1;
+		String fullPath = new String(suffixPath);
+		suffixPath = suffixPath.replace(IRODSManager.IRODS_BASE, "");
 		
+		if(toDownload) {
+			try {
+				irm.readRemoteFile(fsBase, fullPath);
+			} catch (JargonException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 		Adler32 a1 = new Adler32();
 		a1.update(Files.readAllBytes(Paths.get(fsBase+suffixPath)));
 		crc = a1.getValue();
@@ -164,6 +204,12 @@ public class VerifyPathsNDirectories {
 	
 
 	public static void main(String[] args) throws IOException {
+		// SAMPLE RESPONSE
+		/*[/iplant/home/radix_subterra/roots-arizona/20403/2018/9/28$$3373363902, 
+		 /iplant/home/radix_subterra/roots-arizona/20404/2018/9/28$$1043362283, 
+		 /iplant/home/radix_subterra/roots-arizona/20419/2018/9/28$$3522680225, 
+		 /iplant/home/radix_subterra/roots-arizona/20420/2018/9/28$$2550387965]*/
+
 		/*
 		/iplant/home/radix_subterra/roots-arizona/20420/2018/9/28/irt/20420-2018-9-28-irt.gblock$$2550387965
 		/iplant/home/radix_subterra/roots-arizona/20404/2018/9/28/irt/20404-2018-9-28-irt.gblock$$1043362283
@@ -171,10 +217,28 @@ public class VerifyPathsNDirectories {
 		/iplant/home/radix_subterra/roots-arizona/20419/2018/9/28/irt/20419-2018-9-28-irt.gblock$$3522680225
 		*/
 		
-		VerifyPathsNDirectories vpd = new VerifyPathsNDirectories("D:\\radix\\testdir", "roots-arizona");
+		VerifyPathsNDirectories vpd = new VerifyPathsNDirectories("/s/chopin/b/grad/sapmitra/Documents/radix/testdir", "roots-arizona");
 		//vpd.validateDirectories("/testdir/");
-		vpd.validateDirectories("/iplant/home/radix_subterra/roots-arizona$$2550387965");
-
+		
+		
+		List<String> downloadList = new ArrayList<String>();
+		downloadList.add("/iplant/home/radix_subterra/roots-arizona/20420/2018/9/28/irt$$2550387965");
+		
+		vpd.downloadPaths(downloadList);
+	}
+	
+	public void downloadPaths(List<String> downloadList) throws IOException {
+		for(String dl : downloadList) {
+			boolean result = false;
+			if(dl.contains("gblock")) {
+				result = validatePaths(dl, true);
+			} else {
+				result = validateDirectories(dl);
+			}
+			
+			if(!result)
+				System.out.println("FAILURE DOWNLOADING "+dl);
+		}
 	}
 	
 	

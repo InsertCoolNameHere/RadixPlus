@@ -257,7 +257,7 @@ public class DataStoreHandler {
 										// MEANS THIS NODE WILL HANDLE SUBMISSION OF ALL DATA FOR THIS PLOT
 										if (reply.getType() == TYPE.LOCK_ACQUIRED) {
 											
-											logger.info("RIKI: LOCK FOR PLOT & IRODS INSERTION "+entry.getKey()+" ACQUIRED BY NODE: "+sn.getHostName());
+											//logger.info("RIKI: LOCK FOR PLOT & IRODS INSERTION "+entry.getKey()+" ACQUIRED BY NODE: "+sn.getHostName());
 											//this machine gets privilege to write this plot file to IRODS.
 											//create a StoreMessage so a thread can deal with this task
 											
@@ -536,7 +536,7 @@ public class DataStoreHandler {
 		 */
 		private void handleDataRequest(StoreMessage msg) {
 			try {
-				logger.info("RIKI: HANDLING: "+msg.getFilePath());
+				//logger.info("RIKI: HANDLING: "+msg.getFilePath());
 				
 				String sensorType = getSensorTypeFromPath(msg.getFilePath());
 				
@@ -630,14 +630,14 @@ public class DataStoreHandler {
 				
 				
 				// OVERWRITING PARTIAL PLOT DATA WITH FULL DATA, COMBINED FROM ALL NODES
-				logger.info("RIKI: WRITING OUT FULL PLOT DATA TO :"+localPlotData.getAbsolutePath()+" AT NODE: "+sn.getHostName());
+				//logger.info("RIKI: WRITING OUT FULL PLOT DATA TO :"+localPlotData.getAbsolutePath()+" AT NODE: "+sn.getHostName());
 				
 				FileWriter overWriter = new FileWriter(localPlotData, false);
 				overWriter.write(sortedPlotData);
 				overWriter.close();
 				
 				// RIKI ACTUAL WRITING TO IRODS
-				logger.info("RIKI: COULD HAVE SENT TO IRODS, BUT DIDNT");
+				//logger.info("RIKI: COULD HAVE SENT TO IRODS, BUT DIDNT");
 				
 				//Send off to IRODS
 				if (msg.getPlotID() > 0) {

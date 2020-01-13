@@ -392,9 +392,9 @@ public class StorageNode implements RequestListener{
 							event.getSpatialHint(), false, event.getConfigs());
 					
 					fsMap.put(event.getName(), fs);
-					logger.info("RIKI: REACHED HERE5");
-					logger.info("RIKI: FSMAP: "+fsMap);
-					logger.info("RIKI: REACHED HERE6");
+					//logger.info("RIKI: REACHED HERE5");
+					//logger.info("RIKI: FSMAP: "+fsMap);
+					//logger.info("RIKI: REACHED HERE6");
 				} catch (FileSystemException | SerializationException | IOException | PartitionException | HashException
 						| HashTopologyException e) {
 					logger.log(Level.SEVERE, "Could not initialize the Galileo File System!", e);
@@ -570,30 +570,12 @@ public class StorageNode implements RequestListener{
 		String fsName = request.getFilesystem();
 		if (fsName != null) {
 			GeospatialFileSystem gfs = (GeospatialFileSystem) fsMap.get(fsName);
-			if (gfs != null) {
-				
-				IRODSManager subterra = new IRODSManager();
-				
-				String[] paths = null;
-				try {
-					paths = subterra.readAllRemoteFiles(fsName);
-				} catch (JargonException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				
-				
-				String pp = "";
-				for(String path: paths) {
-					gfs.addIRODSPendingPath(path);
-					pp+=path+"\n";
-				}
-				logger.info("RIKI: RIG PATHS DOWNLOADED: "+pp);
-				
-				gfs.updateRIG();
-			}
+			if(gfs!=null)
+				gfs.updateFS_RIG();
 		}		
 	}
+
+	
 	
 	
 		

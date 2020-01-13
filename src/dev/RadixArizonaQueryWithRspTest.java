@@ -13,6 +13,8 @@ import java.util.List;
 
 import org.json.JSONObject;
 
+import galileo.comm.BlockQueryRequest;
+import galileo.comm.BlockQueryResponse;
 import galileo.comm.Connector;
 import galileo.comm.GalileoEventMap;
 import galileo.comm.MetadataRequest;
@@ -37,7 +39,7 @@ import galileo.util.GeoHash;
 
 public class RadixArizonaQueryWithRspTest implements MessageListener {
 	
-	private static boolean isQuery = true;
+	private static int isQuery = 2;
 	
 	private static GalileoEventMap eventMap = new GalileoEventMap();
 	private static EventWrapper wrapper = new BasicEventWrapper(eventMap);
@@ -56,15 +58,19 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 			
 			System.out.println("RESPONSE RECEIVED...");
 			
-			if (isQuery) {
+			if (isQuery == 0) {
 				QueryResponse response = (QueryResponse) wrapper.unwrap(message);
 				
 				System.out.println("RESPONSE\n=============\n");
 				System.out.println(response.getJSONResults().toString());
-			} else {
+			} else if (isQuery == 1){
 				MetadataResponse response = (MetadataResponse) wrapper.unwrap(message);
 
 				System.out.println(response.getResponse().toString());
+			} else if (isQuery == 2){
+				BlockQueryResponse response = (BlockQueryResponse) wrapper.unwrap(message);
+
+				System.out.println(response.pathResults);
 			}
 
 		} catch (Exception e) {
@@ -105,13 +111,17 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 		
 		Event vr = null;
 		
-		if(isQuery) {
+		if(isQuery == 0) {
 			
 			vr = createPolygonRequest();
 			
-		} else {
+		} else if(isQuery == 1){
 		
 			vr = new MetadataRequest(reqJson) ;
+		
+		} else if(isQuery == 2){
+		
+			vr = createRIGRequest() ;
 		
 		}
 		
@@ -163,6 +173,46 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 		QueryRequest qr = new QueryRequest("roots-arizona", cl);
 		qr.setSensorName("irt");
 		qr.setTime("2018-09-28-xx");
+		
+		// THE QUERY FOR
+		
+		//Query q = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("date", "2018-9-28"))));
+		//Query q1 = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("sensorType", "irt"))));
+		
+		//Query allQ = queryIntersection(q,q1);
+		
+		//qr.setMetdataQuery(q1);
+		return qr;
+	}
+	
+	
+	private static Event createRIGRequest() {
+		//33.061982, -111.970253
+		//(40.65319061279297, -104.9959945678711), (40.653018951416016, -104.99565124511719)
+		//(33.06200408935547, -111.96910095214844), (33.06132125854492, -111.96910095214844), (33.06132125854492, -111.96965026855469), (33.06200408935547, -111.96965026855469)
+		float lat1 = 33.061851f;
+		float lat2 = 33.061588f;
+		//33.060944, -111.970672
+		float lon1 = -111.969627f;
+		float lon2 = -111.969301f;
+		
+		
+		Coordinates c1 = new Coordinates(lat2, lon1);
+		Coordinates c2 = new Coordinates(lat2, lon2);
+		Coordinates c3 = new Coordinates(lat1, lon2);
+		Coordinates c4 = new Coordinates(lat1, lon1);
+		//Coordinates c5 = new Coordinates(36.78f, -107.64f);
+		
+		List<Coordinates> cl = new ArrayList<Coordinates>();
+		cl.add(c1); cl.add(c2); cl.add(c3); cl.add(c4);
+		
+		//GeoHash.decodeHash("9xjr6b8m");
+		
+		//System.out.println(GeoHash.getIntersectingGeohashes(cl, 8));
+		
+		BlockQueryRequest qr = new BlockQueryRequest("roots-arizona", cl,null, "2018-xx-xx-xx");
+		//qr.setSensorName("irt");
+		//qr.setTime("2018-09-28-xx");
 		
 		// THE QUERY FOR
 		

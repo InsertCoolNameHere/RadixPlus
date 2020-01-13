@@ -101,8 +101,8 @@ public class IRODSManager {
 	public void writeRemoteData(String data, String irodspath) {
 		try {
 			
-			logger.info("RIKI: ARGUMENTS: "+irodspath);
-			logger.info("RIKI: DATA: "+data);
+			//logger.info("RIKI: ARGUMENTS: "+irodspath);
+			//logger.info("RIKI: DATA: "+data);
 			String fileName = irodspath.substring(irodspath.lastIndexOf("/")+1);
 			
 			logger.info("RIKI: FILENAME: "+fileName);
@@ -141,7 +141,7 @@ public class IRODSManager {
 		tcb.setMaximumErrorsBeforeCanceling(10);
 		tcb.setTotalBytesToTransfer(toExport.length());
 		
-		logger.info("RIKI: RDIR: "+remoteDirectory);
+		//logger.info("RIKI: RDIR: "+remoteDirectory);
 		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
 		
 		logger.info("RIKI: RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
@@ -193,7 +193,7 @@ public class IRODSManager {
 		IRODSFile remoteDir = null;
 		try {
 			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
-			logger.info("RIKI: WRITE OUT " + remoteDirectory+ "<<"+ toExport.getAbsolutePath());
+			//logger.info("RIKI: WRITE OUT " + remoteDirectory+ "<<"+ toExport.getAbsolutePath());
 			try {
 				remoteDir.mkdirs();
 				dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
@@ -386,6 +386,61 @@ public class IRODSManager {
 	}
 	
 	
+	/**
+	 * DOWNLOAD A FULL DIRECTORY FROM IRODS
+	 * @author sapmitra
+	 * @throws JargonException
+	 * @throws IOException
+	 */
+	public void readRemoteDirectory_validation(String whereToPut, String whatToDownload) throws JargonException, IOException {
+
+		TransferOptions opts = new TransferOptions();
+		//opts.setComputeAndVerifyChecksumAfterTransfer(true);
+		opts.setIntraFileStatusCallbacks(true);
+		TransferControlBlock tcb = DefaultTransferControlBlock.instance();
+		tcb.setTransferOptions(opts);
+		
+		TransferStatusCallbackListener tscl = new TransferStatusCallbackListener() {
+			@Override
+			public FileStatusCallbackResponse statusCallback(TransferStatus transferStatus) {
+				return FileStatusCallbackResponse.CONTINUE;
+			}
+
+			@Override
+			public void overallStatusCallback(TransferStatus transferStatus) {
+			}
+
+			@Override
+			public CallbackResponse transferAsksWhetherToForceOperation(String irodsAbsolutePath,
+					boolean isCollection) {
+				return CallbackResponse.YES_FOR_ALL;
+			}
+		};
+		
+		String sufixDir = whatToDownload.replace(IRODS_BASE, "");
+		int indx = sufixDir.lastIndexOf("/");
+		sufixDir = sufixDir.substring(0,indx);
+		
+		File temp = new File(whereToPut+sufixDir);
+		
+		if (!temp.exists())
+			temp.mkdirs();
+		//IRODSFile remoteFile = fileFactory.instanceIRODSFile("plots/");
+		IRODSFile toFetch = fileFactory.instanceIRODSFile(whatToDownload);
+		while (!toFetch.exists()) {
+			try {
+				System.out.println("THE PATH YOU ARE TRYING TO DOWNLOAD DIES NOT EXIST");
+				Thread.sleep(100);
+			} catch (InterruptedException e1) {
+				e1.printStackTrace();
+			}
+		}
+		
+		dataTransferOperationsAO.getOperation(toFetch, temp, tscl, tcb);
+		
+	}
+	
+	
 	public static void main(String arg[]) throws JargonException, IOException {
 		
 		IRODSManager im = new IRODSManager();
@@ -394,5 +449,46 @@ public class IRODSManager {
 		System.out.println(readAllRemoteFiles.length);
 	}
 	
+	
+	public void readRemoteFile(String whereToPut, String whatToDownload) throws JargonException, IOException {
+
+		TransferOptions opts = new TransferOptions();
+		opts.setComputeAndVerifyChecksumAfterTransfer(true);
+		opts.setIntraFileStatusCallbacks(true);
+		TransferControlBlock tcb = DefaultTransferControlBlock.instance();
+		tcb.setTransferOptions(opts);
+		
+		TransferStatusCallbackListener tscl = new TransferStatusCallbackListener() {
+			@Override
+			public FileStatusCallbackResponse statusCallback(TransferStatus transferStatus) {
+				return FileStatusCallbackResponse.CONTINUE;
+			}
+
+			@Override
+			public void overallStatusCallback(TransferStatus transferStatus) {
+			}
+
+			@Override
+			public CallbackResponse transferAsksWhetherToForceOperation(String irodsAbsolutePath,
+					boolean isCollection) {
+				return CallbackResponse.YES_FOR_ALL;
+			}
+		};
+		
+		String suffix = whatToDownload.replace(IRODS_BASE, "");
+		suffix = suffix.substring(0,suffix.lastIndexOf(IRODS_SEPARATOR));
+		File temp = new File(whereToPut+suffix);
+		if (!temp.exists())
+			temp.mkdirs();
+		//IRODSFile remoteFile = fileFactory.instanceIRODSFile("plots/");
+		IRODSFile toFetch = fileFactory.instanceIRODSFile(whatToDownload);
+		if (!toFetch.exists()) {
+			
+			logger.info("NOT EXISTS");
+			
+		}
+		dataTransferOperationsAO.getOperation(toFetch, temp, tscl, tcb);
+		
+	}
 	
 }

@@ -49,6 +49,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.irods.jargon.core.exception.JargonException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -74,6 +75,7 @@ import galileo.dataset.feature.FeatureSet;
 import galileo.dataset.feature.FeatureType;
 import galileo.dht.DataStoreHandler;
 import galileo.dht.GroupInfo;
+import galileo.dht.IRODSManager;
 import galileo.dht.NetworkInfo;
 import galileo.dht.NodeInfo;
 import galileo.dht.OriginalTemporalHierarchyPartitioner;
@@ -267,11 +269,37 @@ public class GeospatialFileSystem extends FileSystem {
 			logger.log(Level.SEVERE, "could not open grid initialization file. Error: " + e);
 		}
 		
-		
+		updateFS_RIG();
 		
 		
 		setType("geospatial");
 		createMetadataGraph();
+	}
+	
+	
+	public void updateFS_RIG() throws IOException {
+	
+		IRODSManager subterra = new IRODSManager();
+		
+		String[] paths = null;
+		try {
+			paths = subterra.readAllRemoteFiles(name);
+		} catch (JargonException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		if(paths!=null && paths.length > 0) {
+			String pp = "";
+			for(String path: paths) {
+				addIRODSPendingPath(path);
+				pp+=path+"\n";
+			}
+			logger.info("RIKI: RIG PATHS DOWNLOADED: "+pp);
+			
+			updateRIG();
+		}
+		
 	}
 	
 	private static String[] generateGeohashes(String[] baseGeohashes, int desiredPrecision) {
@@ -936,8 +964,15 @@ public class GeospatialFileSystem extends FileSystem {
 			pending_operations = metadataQuery.getOperations();
 		
 		if(temporalExpression != null) {
-			for(Operation op : pending_operations) {
-				op.addExpressions(temporalExpression);
+			if(pending_operations != null) {
+				for(Operation op : pending_operations) {
+					op.addExpressions(temporalExpression);
+				}
+			} else {
+				
+				pending_operations = new ArrayList<Operation>();
+				Operation op = new Operation(temporalExpression);
+				pending_operations.add(op);
 			}
 		}
 

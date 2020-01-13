@@ -96,9 +96,10 @@ public class BlockQueryRequest implements Event {
 		validate(fsName);
 		setPolygon(polygon);
 		setTime(time);
-		if (metadataQuery == null)
-			throw new IllegalArgumentException("Atleast one of the queries must be present");
-		
+		/*
+		 * if (metadataQuery == null) throw new
+		 * IllegalArgumentException("Atleast one of the queries must be present");
+		 */
 		if (metadataQuery != null)
 			setMetdataQuery(metadataQuery);
 	}
