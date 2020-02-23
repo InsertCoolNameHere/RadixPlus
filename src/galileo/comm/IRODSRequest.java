@@ -41,7 +41,7 @@ import galileo.serialization.SerializationOutputStream;
 
 public class IRODSRequest implements Event{
 	public enum TYPE{
-		LOCK_REQUEST, IGNORE, LOCK_ACQUIRED, DATA_REQUEST, DATA_REPLY;
+		LOCK_REQUEST, IGNORE, LOCK_ACQUIRED, DATA_REQUEST, DATA_REPLY, LOCK_RELEASE_REQUEST, LOCK_RELEASED;
 	}
 	
 	private TYPE type;
@@ -107,6 +107,7 @@ public class IRODSRequest implements Event{
 		
 		out.writeString(fs);
 		out.writeString(metadata);
+		
 	}
 
 	public IRODSRequest(SerializationInputStream in) throws IOException, SerializationException{
@@ -140,6 +141,10 @@ public class IRODSRequest implements Event{
 				return 4;
 			case DATA_REPLY:
 				return 5;
+			case LOCK_RELEASE_REQUEST:
+				return 6;
+			case LOCK_RELEASED:
+				return 7;
 			default:
 				throw new IllegalArgumentException("Invalid type: " + type);
 		}
@@ -156,6 +161,10 @@ public class IRODSRequest implements Event{
 				return TYPE.DATA_REQUEST;
 			case 5:
 				return TYPE.DATA_REPLY;
+			case 6:
+				return TYPE.LOCK_RELEASE_REQUEST;
+			case 7:
+				return TYPE.LOCK_RELEASED;
 			default:
 				throw new IllegalArgumentException("Invalid type: " + type);
 		}
@@ -209,4 +218,5 @@ public class IRODSRequest implements Event{
 	public void setPlotNum(int plotNum) {
 		this.plotNum = plotNum;
 	}
+
 }

@@ -59,6 +59,12 @@ public class Sampler {
 		rand.setSeed(System.currentTimeMillis());
 	}
 	
+	public static void main(String arg[]) {
+		String paths= "/iplant/home/radix_subterra/roots-arizona/20419/2018/9/28/irt/20419-2018-9-28-irt.gblock$$3522680225";
+		String[] tokens = paths.split("/");
+		System.out.println(tokens[tokens.length-2]);
+	}
+	
 	/**
 	 * This method applies the "stamping" method of sampling. That is,
 	 * create a query HashGrid from the sampled file info, and logical AND
@@ -73,20 +79,34 @@ public class Sampler {
 		//HashGrid queryGrid = new HashGrid(grid.getBaseHash(), grid.getPrecision(), StorageNode.a1, StorageNode.a2);
 		HashGrid queryGrid = new HashGrid(grid.getZonesString(), grid.getPrecision(), grid.upperLeftHash, grid.upperRightHash,
 				grid.bottomRightHash, grid.bottomLeftHash);
+		
+		//logger.info("RIKI: SAMPLER PARAMETERS: "+grid.getZonesString()+" "+ grid.getPrecision()+" "+ grid.upperLeftHash+" "+ grid.upperRightHash+" "+
+				//grid.bottomRightHash+" "+ grid.bottomLeftHash);
+		
+		
 		for (String line : lines){
-			
-			double lat = Double.parseDouble(line.split(",")[latIndex]);
-			double lon = Double.parseDouble(line.split(",")[lonIndex]); //hard code index #1 and #2 to be lat and long. WILL CHANGE
-			//logger.info("RIKI:PT:"+lat+","+lon);
-			queryGrid.addPoint(new Coordinates(lat, lon));
+			String[] tokens = line.split(",");
+			if(tokens.length > lonIndex) {
+				double lat = Double.parseDouble(line.split(",")[latIndex]);
+				double lon = Double.parseDouble(line.split(",")[lonIndex]); //hard code index #1 and #2 to be lat and long. WILL CHANGE
+				//logger.info("RIKI:PT:"+lat+","+lon);
+				queryGrid.addPoint(new Coordinates(lat, lon));
+			}
 		}
+	
 		/*Ensure that all points were added*/
 		queryGrid.applyUpdates();
 		/*Once all points are added, query the master grid to get the intersection*/
 		int [] intersections = grid.query(queryGrid.getBitmap());
 		
 		if (intersections.length == 0) {
-			logger.info("\n\n0 intersections detected between hashgrid and querygrid");
+			logger.info("RIKI: 0 intersections detected between hashgrid and querygrid");
+		} else {
+			float p = (float)intersections.length/(float)lines.length;
+			
+			/*
+			 * if(p < 0.01) logger.info("RIKI: SOME INTERSECTIONS FOUND "+(p*100)+"%");
+			 */
 		}
 
 		/*For each index, use the partitioner to determine where it goes*/
@@ -109,6 +129,7 @@ public class Sampler {
 //		return dests;
 		return new SamplerResponse(dests, true);
 	}
+	
 	
 	/**
 	 * This method relies on hard-coded positions for various values.

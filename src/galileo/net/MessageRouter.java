@@ -197,7 +197,7 @@ public abstract class MessageRouter implements Runnable {
     throws IOException {
         ServerSocketChannel servSocket = (ServerSocketChannel) key.channel();
         SocketChannel channel = servSocket.accept();
-        logger.info("Accepted connection: " + getClientString(channel));
+        //logger.info("Accepted connection: " + getClientString(channel));
 
         TransmissionTracker tracker = new TransmissionTracker(writeQueueSize);
         channel.configureBlocking(false);

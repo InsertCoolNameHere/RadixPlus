@@ -77,9 +77,9 @@ import web.SamplerResponse;
 // to begin ingesting data from a particular location. The command to issue is : echo "<filePathToIngest>$$<fsName>$$sensorType" | nc <host-name> 42070
 public class DataIngestor extends Thread{
 	
-	public static String fsName = "roots-arizona1";
+	//public static String fsName = "roots-arizona1";
 	// THE TYPE OF FILE WE ARE DEALING WITH...COMES INTO FACTOR FOR ARIZONA
-	public static String fileSensorType = "vanilla";
+	//public static String fileSensorType = "vanilla";
 	
 	public String [] hosts;
 	public int index = 0;
@@ -93,6 +93,7 @@ public class DataIngestor extends Thread{
 	private ServerSocketChannel serverChannel;
 	private Selector selector;
 	public volatile long sumStampTimes = 0, numStamps = 0;
+	public static final int CHUNK_SIZE = 2000;
 	
 	private static Logger logger = Logger.getLogger("galileo");
 	public DataIngestor(StorageNode sn) throws IOException{
@@ -100,9 +101,9 @@ public class DataIngestor extends Thread{
 		this.selector = initSelector();
 		String nodeFile = SystemConfig.getNetworkConfDir() + File.separator + "hostnames";
 		this.hosts = new String(Files.readAllBytes(Paths.get(nodeFile))).split(System.lineSeparator());
-		this.threadPool = new ChunkProcessor[10];
+		/*this.threadPool = new ChunkProcessor[10];
 		for (int i = 0; i < threadPool.length; i++)  
-			threadPool[i] = new ChunkProcessor(this, this.sn);
+			threadPool[i] = new ChunkProcessor(this, this.sn);*/
 			
 	}
 	public void shutdown() {
@@ -260,12 +261,19 @@ public class DataIngestor extends Thread{
 		
 		filePath = tokens[0];
 		
+		String fsName = "INVALID_NAME";
+		String fileSensorType = "INVALID_TYPE";
+		
 		if(tokens.length == 3) {
 			fsName = tokens[1];
 			fileSensorType = tokens[2];
 		}
 		
 		logger.info("RIKI: TOKENS:"+tokens.length+" "+fsName+" "+fileSensorType);
+		
+		this.threadPool = new ChunkProcessor[10];
+		for (int i = 0; i < threadPool.length; i++)  
+			threadPool[i] = new ChunkProcessor(this, this.sn, fsName, fileSensorType);
 		
 		// INITIATE CHUNK PROCESSORS
 		// THESE WILL PICK OFF CHUNKS FROM THE QUEUE
@@ -313,7 +321,7 @@ public class DataIngestor extends Thread{
 							lineCount++;
 							linesCounted++;
 						}
-						if (lineCount == 400) {//let's test this shall we?
+						if (lineCount == CHUNK_SIZE) {//let's test this shall we?
 							queue.add(chunk.toString());
 							numMsgs++;
 							chunk = new StringBuilder();
@@ -352,15 +360,20 @@ public class DataIngestor extends Thread{
 	 * @author sapmitra
 	 *
 	 */
-	 static class ChunkProcessor extends Thread {
+	 class ChunkProcessor extends Thread {
 	        private final DataIngestor master;
 	        private final StorageNode sn;
 	        private ClientMessageRouter messageRouter;
 	        private volatile boolean alive;
-	        public ChunkProcessor(DataIngestor master, StorageNode sn) throws IOException {
+	        private String fsName;
+	        private String fileSensorType;
+	        
+	        public ChunkProcessor(DataIngestor master, StorageNode sn, String fsName, String fileSensorType) throws IOException {
 	            this.master = master;
 	            this.sn = sn;
 	            this.messageRouter = new ClientMessageRouter();
+	            this.fileSensorType = fileSensorType;
+	            this.fsName = fsName;
 	        }
 	        private void sendMessage(byte[] message, NodeInfo dest, boolean checkAll, String fsName1, String fileSensorType1) throws IOException {
 	        	NonBlockStorageRequest request = new NonBlockStorageRequest(message, fsName1, fileSensorType1);
@@ -384,6 +397,9 @@ public class DataIngestor extends Thread{
 	        	while(alive) {
 					try {
 						String data = master.queue.take();
+						
+						//logger.info("RIKI: DEALING WITH CHUNK OF SIZE: "+ data.split("\n").length);
+						
 						long start = System.currentTimeMillis();
 						
 						// DATA IS COMPRESSED BEFORE BEING SENT OUT
@@ -393,7 +409,7 @@ public class DataIngestor extends Thread{
 						// HOW MANY RECORDS FALL IN WHICH DESTINATION
 						HashMap<NodeInfo, Integer> dests = response.getNodeMap();
 						
-						logger.info("RIKI: THE FOLLOWING NODES MIGHT HANDLE CHUNKS: "+dests.keySet());
+						//logger.info("RIKI: THE FOLLOWING NODES MIGHT HANDLE CHUNKS: "+dests.keySet());
 						if (dests.keySet().size() == 1) {//all data belongs to one node
 							Map.Entry<NodeInfo,Integer> entry = dests.entrySet().iterator().next();
 							NodeInfo dest = entry.getKey();
@@ -405,7 +421,7 @@ public class DataIngestor extends Thread{
 							else
 								logger.severe("Identified null as destination");
 							
-							logger.info("RIKI: THE FOLLOWING NODE(S) IS SELECTED TO HANDLE CHUNKS: "+dests.keySet());
+							//logger.info("RIKI: THE FOLLOWING NODE(S) IS SELECTED TO HANDLE CHUNKS: "+dests.keySet());
 						}
 						else {
 							
@@ -423,7 +439,7 @@ public class DataIngestor extends Thread{
 							else if (finalDest!=null)
 								sendMessage(compressed, finalDest, response.checkAll(), fsName, fileSensorType);
 							
-							logger.info("RIKI: THE FOLLOWING NODE(S) IS SELECTED TO HANDLE CHUNKS: "+dests.keySet());
+							//logger.info("RIKI: THE FOLLOWING NODE(S) IS SELECTED TO HANDLE CHUNKS: "+dests.keySet());
 						}
 						master.sumStampTimes += (System.currentTimeMillis()-start);
 						master.numStamps ++;

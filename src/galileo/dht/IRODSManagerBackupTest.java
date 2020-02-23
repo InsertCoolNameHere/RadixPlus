@@ -66,9 +66,7 @@ import org.irods.jargon.core.transfer.TransferControlBlock;
 
 import galileo.config.SystemConfig;
 import galileo.dht.DataStoreHandler.MessageHandler;
-public class IRODSManager {
-	
-	// Jargon version: https://github.com/DICE-UNC/DICE-Maven/blob/master/releases/org/irods/jargon/jargon-core/4.0.2.6-RELEASE/jargon-core-4.0.2.6-RELEASE-jar-with-dependencies.jar
+public class IRODSManagerBackupTest {
 	private static Logger logger = Logger.getLogger("galileo");
 	private IRODSAccount account;
 	private IRODSFileSystem filesystem;
@@ -81,8 +79,8 @@ public class IRODSManager {
 	public static String GALILEO_SEPARATOR = File.separator;
 	
 	
-	public IRODSManager() {	//davos.cyverse.org
-		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home/radix_subterra", "iplant", "");
+	public IRODSManagerBackupTest() {	//davos.cyverse.org
+		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", IRODS_BASE, "iplant", "");
 		try {
 			filesystem = IRODSFileSystem.instance();
 			fileFactory = filesystem.getIRODSFileFactory(account);
@@ -92,6 +90,34 @@ public class IRODSManager {
 		} catch (JargonException e) {
 			logger.severe("Error initializing IRODS FileSystem: " + e);
 		}	 
+	}
+	
+	public static void main(String arg[]) throws JargonException {
+		
+		IRODSManagerBackupTest ibm = new IRODSManagerBackupTest();
+		
+		// MAKE SURE NO SLASH BEFORE roots-arizona. THIS CREATES THE FILE INSIDE IRODS_BASE
+		//ibm.riki("roots-arizona1/rig/");
+		ibm.riki("roots-arizona/rig");
+	}
+	
+	public void riki(String remoteDirectory)throws JargonException{
+		
+		//remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
+		
+		logger.info("RIKI: RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
+		IRODSFile remoteDir = null;
+		try {
+			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
+			//logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
+			remoteDir.mkdirs();
+			
+			
+		} catch (JargonException e) {
+			logger.severe("Error with IRODS: " + e + ": " + Arrays.toString(e.getStackTrace())+"\nFile: ");
+		}
+		
+		
 	}
 	
 	
@@ -134,33 +160,8 @@ public class IRODSManager {
 		}
 	}
 	
-	public void initRIGPath(String fsName) {
-		
-		String remoteDirectory = fsName+IRODS_SEPARATOR+"rig";
-		
-		logger.info("RIKI: Initializing RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
-		IRODSFile remoteDir = null;
-		try {
-			
-			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
-			
-			if(!remoteDir.exists()) {
-				remoteDir.mkdirs();
-				logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
-			}
-			logger.info("RIKI: Initialized RIG DUMP: " + remoteDirectory);
-			remoteDir.close();
-			
-		} catch (Exception e) {
-			logger.severe("RIKI: Problem IRODS INIT: " + e );
-		} finally {
-			
-		}
-	}
 	
-	// HANDLES RIG DUMP
 	public void writeRemoteFileAtSpecificPath(File toExport, String remoteDirectory)throws JargonException{
-		
 		TransferOptions opts = new TransferOptions();
 		opts.setComputeAndVerifyChecksumAfterTransfer(true);
 		opts.setIntraFileStatusCallbacks(true);
@@ -169,27 +170,21 @@ public class IRODSManager {
 		tcb.setMaximumErrorsBeforeCanceling(10);
 		tcb.setTotalBytesToTransfer(toExport.length());
 		
-		logger.info("RIKI: RFFILE: "+remoteDirectory);
+		//logger.info("RIKI: RDIR: "+remoteDirectory);
 		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
 		
 		logger.info("RIKI: RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
 		IRODSFile remoteDir = null;
 		try {
-			
 			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
+			//logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
+			remoteDir.mkdirs();
 			
-			if(!remoteDir.exists()) {
-				logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
-				remoteDir.mkdirs();
 			
-			}
-			
-			logger.info("Created remoteDirX: " + remoteDir.getAbsolutePath());
 			while(true) {
 				try {
 					
 					dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
-					logger.info("RIKI: DUMPED "+toExport.getName() +" THE RIG AT: "+remoteDir.getAbsolutePath()+" "+remoteDirectory);
 					break;
 				} catch(UnixFileCreateException e) {
 					logger.info("UnixFileCreateException caught, trying again.");
@@ -200,7 +195,8 @@ public class IRODSManager {
 						e1.printStackTrace();
 					}
 					//dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
-				} catch(DataNotFoundException e) {
+				}//shouldn't need to catch overwrite exceptions now...
+				catch(DataNotFoundException e) {
 					//stupid IRODS... directory was not created properly, so create it again and retry
 					logger.severe("RIKI: CAUGHT DataNotFoundException EXCEPTION!");
 					remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
@@ -210,26 +206,18 @@ public class IRODSManager {
 				} catch (OverwriteException | JargonFileOrCollAlreadyExistsException | DuplicateDataException e){//append to existing file
 					logger.severe("CAUGHT OVERWRITE EXCEPTION!");
 					
-				} catch (Exception e) {
-					logger.severe("RIKI: Problem IRODS: " + e + ": " + toExport.getAbsolutePath());
-				} 
+				}
 			}
 		} catch (JargonException e) {
 			logger.severe("Error with IRODS: " + e + ": " + Arrays.toString(e.getStackTrace())+"\nFile: " + toExport.getAbsolutePath());
-		} catch (Exception e) {
-			logger.severe("RIKI: Problem IRODS: " + e + ": " + toExport.getAbsolutePath());
-		} finally {
-			dataTransferOperationsAO.closeSessionAndEatExceptions();
 		}
 		
 		
 	}
 	
 	
-	// THIS WRITES THE ACTUAL DATA BACKUP FOR EACH PLOTS
-	public boolean writeRemoteFile(File toExport, MessageHandler caller)throws JargonException{
-		
-		boolean isSuccess = false;
+
+	public void writeRemoteFile(File toExport, MessageHandler caller)throws JargonException{
 		TransferOptions opts = new TransferOptions();
 		opts.setComputeAndVerifyChecksumAfterTransfer(true);
 		opts.setIntraFileStatusCallbacks(true);
@@ -255,7 +243,6 @@ public class IRODSManager {
 				try {
 					i++;
 					dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
-					isSuccess = true;
 					break;
 				} catch(UnixFileCreateException e) {
 					logger.info("UnixFileCreateException caught, trying again.");
@@ -279,17 +266,13 @@ public class IRODSManager {
 						e1.printStackTrace();
 					}
 				} catch (OverwriteException | JargonFileOrCollAlreadyExistsException | DuplicateDataException e){//append to existing file
-					logger.severe("RIKI: CAUGHT OVERWRITE EXCEPTION FOR "+remoteDir);
-					break;
+					logger.severe("CAUGHT OVERWRITE EXCEPTION FOR "+remoteDir);
 					
 				}
 			}
 		} catch (JargonException e) {
 			logger.severe("Error with IRODS: " + e + ": " + Arrays.toString(e.getStackTrace())+"\nFile: " + toExport.getAbsolutePath());
-		} finally {
-			dataTransferOperationsAO.closeSessionAndEatExceptions();
 		}
-		return isSuccess;
 	}
 
 
@@ -341,7 +324,6 @@ public class IRODSManager {
 		if (!toFetch.exists()) {
 			
 			logger.info("RIKI: NOT EXISTS:"+"/"+fsName+"/rig");
-			toFetch.close();
 			return null;
 			//System.out.println("RIKI: NOT EXISTS:"+"/util/me");
 			//Thread.sleep(100);
@@ -362,7 +344,7 @@ public class IRODSManager {
 		
 		String[] paths = sb.toString().split("\\n");
 		logger.info("RIKI: PATHS READ: " + paths.length);
-		toFetch.close();
+		
 		return paths;
 		
 	}
@@ -417,7 +399,6 @@ public class IRODSManager {
 		
 		dataTransferOperationsAO.getOperation(toFetch, temp, tscl, tcb);
 		
-		toFetch.close();
 	}
 	
 	
@@ -476,64 +457,14 @@ public class IRODSManager {
 	}
 	
 	
-	public static void main2(String arg[]) throws JargonException, IOException {
+	public static void main1(String arg[]) throws JargonException, IOException {
 		
-		IRODSManager im = new IRODSManager();
+		IRODSManagerBackupTest im = new IRODSManagerBackupTest();
 		String[] readAllRemoteFiles = im.readAllRemoteFiles("roots-arizona");
 		
 		System.out.println(readAllRemoteFiles.length);
 	}
 	
-	public static void main(String arg[]) throws JargonException, IOException {
-		
-		IRODSManager im = new IRODSManager();
-		//File f = new File("/s/chopin/b/grad/sapmitra/Documents/radix/ABC.csv");
-		//im.initRIGPath("roots-arizona");
-		
-		System.out.println(im.checkExists("roots-arizona/rig"));
-		
-	}
-	
-	private boolean checkExists(String remoteDirectory) {
-		
-		logger.info("RIKI: Checking RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
-		IRODSFile remoteDir = null;
-		try {
-			remoteDir = fileFactory.instanceIRODSFile(remoteDirectory);
-			if(remoteDir.exists()) {
-				return true;
-			}
-			logger.info("Created remoteDir: " + remoteDir.getAbsolutePath());
-		} catch (Exception e) {
-			logger.severe("RIKI: Problem IRODS INIT: " + e );
-		} 
-		return false;
-	}
-
-
-	public static void main1(String arg[]) {
-		int i = 0;
-		int num = 0;
-		while(true) {
-			try {
-				i++;
-				System.out.println("TRYING AGAIN...."+i);
-				if(i < 10) {
-					System.out.println(5/num);
-				} else {
-					System.out.println("SAFE");
-					System.out.println("BREAKING");
-					break;
-					
-				}
-				
-			} catch(Exception e) {
-				System.out.println("CAUGHT EXCEPTION");
-				break;
-			}
-			
-		}
-	}
 	
 	
 	public void readRemoteFile(String whereToPut, String whatToDownload) throws JargonException, IOException {

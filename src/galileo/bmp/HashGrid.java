@@ -276,6 +276,7 @@ public class HashGrid{
 				genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
 			} else {
 				genotype = "GENO"+ThreadLocalRandom.current().nextInt(5);
+				logger.info("RIKI: NO GENOTYPE FOUND FOR: " + plotID);
 			}
 			//String genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
 			

@@ -189,7 +189,6 @@ public class GeospatialFileSystem extends FileSystem {
 		
 		this.configs = config;
 		
-		
 		this.spatialHint = sHint;
 		if (this.featureList != null && this.spatialHint == null)
 			throw new IllegalArgumentException("Spatial hint is needed when feature list is provided");
@@ -252,6 +251,8 @@ public class GeospatialFileSystem extends FileSystem {
 		this.timeFormatter.applyPattern(timeFormat);
 		this.pathJournal = new PathJournal(this.storageDirectory + File.separator + pathStore);
 		
+		logger.info("RIKI: PATH JOURNAL AT "+(this.storageDirectory + File.separator + pathStore));
+		
 		// EXAMPLE OF pathToGridFile: /s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/grid/roots_az/plots.json
 		String pathToGridFile = SystemConfig.getConfDir()+File.separator+"grid"+File.separator+name;
 		
@@ -269,13 +270,18 @@ public class GeospatialFileSystem extends FileSystem {
 			logger.log(Level.SEVERE, "could not open grid initialization file. Error: " + e);
 		}
 		
-		updateFS_RIG();
-		
+		//updateFS_RIG();
+		//initiateRIGDirectory();
 		
 		setType("geospatial");
 		createMetadataGraph();
 	}
 	
+	public void initiateRIGDirectory() {
+		
+		IRODSManager subterra = new IRODSManager();
+		subterra.initRIGPath(name);
+	}
 	
 	/**
 	 * HANDLES UPDATE OF THE RIG GRAPH FOR A GIVEN FILESYSTEM
@@ -299,11 +305,13 @@ public class GeospatialFileSystem extends FileSystem {
 				addIRODSPendingPath(path);
 				pp+=path+"\n";
 			}
-			logger.info("RIKI: RIG PATHS DOWNLOADED: "+pp);
+			logger.info("RIKI: TOTAL RIG PATHS DOWNLOADED: "+paths.length);
 			
 			updateRIG();
 			
 			logger.info("RIKI: RIG UPDATE COMPLETE.");
+		} else {
+			logger.info("RIKI: NO PATH DUMP DETECTED...");
 		}
 		
 	}
@@ -378,6 +386,7 @@ public class GeospatialFileSystem extends FileSystem {
 
 		/* Recover the path index from the PathJournal */
 		List<FeaturePath<String>> graphPaths = new ArrayList<>();
+		
 		boolean recoveryOk = pathJournal.recover(graphPaths);
 		pathJournal.start();
 
@@ -541,6 +550,7 @@ public class GeospatialFileSystem extends FileSystem {
 		// FS CONFIGS ARE READ IN THE CONSTRUCTOR
 		GeospatialFileSystem gfs = new GeospatialFileSystem(storageNode, storageRoot, name, geohashPrecision,
 				nodesPerGroup, temporalType, networkInfo, featureList, spHint, true, fsc);
+		//gfs.updateFS_RIG();
 		
 		gfs.earliestTime = (state.get("earliestTime") != JSONObject.NULL)
 				? new TemporalProperties(state.getLong("earliestTime")) : null;
@@ -659,7 +669,7 @@ public class GeospatialFileSystem extends FileSystem {
  		// IRRESPECTIVE OF WHETHER THIS PATH HAS ALREADY BEEN STORED OR NOT, WE NEED TO UPDATE THE METADATA
  		storeMetadata(meta, blockPath+"$$"+irodsStoragePath);
 
- 		try (FileOutputStream blockData = new FileOutputStream(blockPath, false)) {//overwrite block data, since only storing paths
+ 		try (FileOutputStream blockData = new FileOutputStream(blockPath, true)) {//overwrite block data, since only storing paths
  			if (newLine)
  				blockData.write("\n".getBytes("UTF-8"));
  			blockData.write(block.getData());
@@ -1176,7 +1186,7 @@ public class GeospatialFileSystem extends FileSystem {
 				}
 			}
 			
-			logger.info("RIKI: OVERLAPPING PLOTS FOUND: "+ overlappingPlots);
+			//logger.info("RIKI: OVERLAPPING PLOTS FOUND: "+ overlappingPlots);
 			
 			/* Operations: OR; Expressions: AND. So create your operations accordingly */
 			
@@ -1351,7 +1361,9 @@ public class GeospatialFileSystem extends FileSystem {
 		/* FeaturePath has a list of Vertices, each label in a vertex representing a feature */
 		/* BlockPath is the actual path to the block */
 		FeaturePath<String> path = createPath(blockPath, metadata);
-		pathJournal.persistPath(path);
+		synchronized(pathJournal) {
+			pathJournal.persistPath(path);
+		}
 		storePath(path);
 	}
 

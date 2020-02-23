@@ -39,7 +39,9 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -402,6 +404,12 @@ public class PathJournal {
 
         indexStore.close();
         pathStore.close();
+    }
+    
+    
+    public static void main(String arg[]) throws IOException {
+    	String timeStamp = new SimpleDateFormat("yyyy_MM_dd_HH_mm_ss").format(new Date());
+    	System.out.println(timeStamp);
     }
 }
 

@@ -372,7 +372,7 @@ public class StorageNode implements RequestListener{
 		event.setTemporalType(request.getTemporalType());
 		event.setConfigs(request.getConfigs());
 		for (NodeInfo node : nodes) {
-			logger.info("Requesting " + node + " to perform a file system action");
+			//logger.info("Requesting " + node + " to perform a file system action");
 			sendEvent(node, event);
 		}
 	}
@@ -506,6 +506,14 @@ public class StorageNode implements RequestListener{
 				else
 					context.sendReply(new IRODSRequest(TYPE.IGNORE, request.getPlotNum()));
 				break;
+			case LOCK_RELEASE_REQUEST:
+				if (plotLocks.contains(request.getPlotNum())) {
+					plotLocks.remove(request.getPlotNum());
+					context.sendReply(new IRODSRequest(TYPE.LOCK_RELEASED, request.getPlotNum()));
+				} else {
+					context.sendReply(new IRODSRequest(TYPE.IGNORE, request.getPlotNum()));
+				}
+				break;
 			case DATA_REQUEST:
 				// Need to search fs for plot data and return it
 				File toGet = new File(request.getFilePath());
@@ -525,6 +533,7 @@ public class StorageNode implements RequestListener{
 					
 					context.sendReply(reply);
 					toGet.delete();
+					
 				}
 				else
 					context.sendReply(new IRODSRequest(TYPE.IGNORE, request.getPlotNum()));
@@ -677,8 +686,10 @@ public class StorageNode implements RequestListener{
 				ClientRequestHandler reqHandler = new ClientRequestHandler(network.getAllDestinations(), context, this);
 				reqHandler.handleRequest(new MetadataEvent(request.getRequest()), new MetadataResponse(response));
 				this.requestHandlers.add(reqHandler);
+				
 			} else if ("galileo#plot".equalsIgnoreCase(request.getRequest().getString("kind"))) {
-				// INDIVIDUAL PLOT QUERY...BE IT SUMMARY OR SERIES IS OF THIS TYPE
+				
+				// INDIVIDUAL PLOT QUERY...BE IT SUMMARY(CLICK) OR SERIES(PLOTWISE) IS OF THIS TYPE
 				logger.info("RIKI: ABOUT TO PERFORM A SINGLE PLOT CALCULATION...");
 				/*-------------------------------------------------------------*/
 				// THIS HANDLES METADATA REQUEST
@@ -769,7 +780,7 @@ public class StorageNode implements RequestListener{
 
 			
 		} else if ("galileo#plot".equalsIgnoreCase(event.getRequest().getString("kind")) && "series".equalsIgnoreCase(event.getRequest().getString("type"))) {
-			// GETS CALLED FOR SELECTED PLOT GRAPH VISUALIZATION
+			// GETS CALLED FOR SELECTED PLOTWISE VISUALIZATION
 			// =============================SINGLE PLOT TIME SERIES==========================
 			logger.info("RIKI: SERIES META");
 			JSONObject response = new JSONObject();
@@ -777,28 +788,102 @@ public class StorageNode implements RequestListener{
 			response.put("type", "series");
 			JSONArray result = new JSONArray();
 			GeospatialFileSystem gfs = (GeospatialFileSystem)this.fsMap.get(event.getRequest().getString("filesystem"));
-			Query q = new Query(new Operation(new Expression(Operator.EQUAL, new Feature("plotID", event.getRequest().getInt("plotID")))));
-			List<Path<Feature, String>> paths = gfs.query(q);
+			
+			List<Expression> expressions = new ArrayList<Expression>();
+			expressions.add(new Expression(Operator.EQUAL, new Feature("plotID", event.getRequest().getInt("plotID"))));
+			
 			String features = event.getRequest().getString("features");
-			HashMap<String, ArrayList<String>> dateToFeatureMap = new HashMap<>();
+			
+			Query q = new Query();
+			for(String f : features.split(",")) {
+				List<Expression> myExp = new ArrayList<Expression>(expressions);
+				myExp.add(new Expression(Operator.EQUAL, new Feature("sensorType", f)));
+				
+				Operation op = new Operation(myExp);
+				q.addOperation(op);
+			}
+			
+			List<Path<Feature, String>> paths = gfs.query(q);
+			
+			HashMap<String, List<String>> dateToBlockMap = new HashMap<String, List<String>>();
+			HashMap<String, String> dateToFeatureMap = new HashMap<String, String>();
 			
 			for (Path<Feature, String> path : paths) {
-				ArrayList<String> feats = new ArrayList<>();
+				//ArrayList<String> feats = new ArrayList<>();
 				String pathStr = path.toString();
+				
+				// NODES IN A PATH SEPARATED BY ->
 				String [] split = pathStr.split("->");
-				for (String s : split)
-					if (s.contains("=") && !s.contains("payload"))
+				
+				int yr = 0, month = 0, day = 0; String sType = "";
+				String blockPath = "";
+				for (String s : split) {
+					if (s.contains("=")) {
+						String tokens[] = s.split("=");
+						String label = tokens[0].trim();
+						
+						if(label.equals(GeospatialFileSystem.TEMPORAL_YEAR_FEATURE)) {
+							yr = Integer.valueOf(tokens[1].trim());
+						} else if(label.equals(GeospatialFileSystem.TEMPORAL_MONTH_FEATURE)) {
+							month = Integer.valueOf(tokens[1].trim());
+						} else if(label.equals(GeospatialFileSystem.TEMPORAL_DAY_FEATURE)) {
+							day = Integer.valueOf(tokens[1].trim());
+						} else if(label.equals("sensorType")) {
+							sType = tokens[1].trim();
+						} else if(label.equals("payload")) {
+							String pl = tokens[1].trim();
+							String t[] = pl.split("\\$\\$");
+							blockPath = t[0];
+							if(blockPath.startsWith("[")) {
+								blockPath = blockPath.substring(1);
+							}
+							
+						}
+						
+						/*
 						if (features.contains(s.split("=")[0].trim()))
 							feats.add(s.trim());
 						else if (s.split("=")[0].trim().equals("date"))
-							dateToFeatureMap.put(s.split("=")[1].trim(), feats);
-			}
-			for (Map.Entry<String, ArrayList<String>> entry : dateToFeatureMap.entrySet()) {
-				String dateToFeat = entry.getKey() + "->";
-				for (String feat : entry.getValue()) {
-					dateToFeat += feat + ",";
+							dateToFeatureMap.put(s.split("=")[1].trim(), feats);*/
+					}
 				}
-				result.put(dateToFeat.substring(0, dateToFeat.length()-1));//remove last comma
+				String key = yr+"-"+month+"-"+day+"-"+sType;
+				if(dateToBlockMap.get(key) == null) {
+					List<String> blocks = new ArrayList<String>();
+					dateToBlockMap.put(key, blocks);
+					blocks.add(blockPath);
+				} else {
+				
+					dateToBlockMap.get(key).add(blockPath);
+				}
+			}
+			
+			for(String key : dateToBlockMap.keySet()) {
+				
+				List<String> bpaths = dateToBlockMap.get(key);
+				
+				SummaryStatistics plotSummary = null;
+				for(String path : bpaths) {
+				
+					SummaryStatistics ss = gfs.getSummaryData(path);
+					
+					if(plotSummary == null)
+						plotSummary = ss;
+					else {
+						plotSummary = SummaryStatistics.mergeSummary(plotSummary, ss);
+					}
+					
+				}
+				dateToFeatureMap.put(key, plotSummary.toString());
+				
+			}
+			
+			logger.info("RIKI: dateToFeatureMap:"+dateToFeatureMap);
+			
+			for (Map.Entry<String, String> entry : dateToFeatureMap.entrySet()) {
+				String dateToFeat = entry.getKey() + "->"+entry.getValue();
+				
+				result.put(dateToFeat);//remove last comma
 			}
 			response.put("result", result);
 			response.put("features", features);
@@ -955,7 +1040,7 @@ public class StorageNode implements RequestListener{
 		String queryId = String.valueOf(System.currentTimeMillis());
 		GeospatialFileSystem gfs = (GeospatialFileSystem) this.fsMap.get(request.getFilesystemName());
 		
-		logger.info("RIKI: RECEIVED A QUERY REQUEST");
+		//logger.info("RIKI: RECEIVED A QUERY REQUEST");
 		if (gfs != null) {
 			QueryResponse response = new QueryResponse(queryId, gfs.getFeaturesRepresentation(), new JSONObject());
 			Metadata data = new Metadata();
@@ -981,7 +1066,7 @@ public class StorageNode implements RequestListener{
 			
 			// THE TEMPORAL PROPERTY IS NOT EMBEDDED IN METADATA BECAUSE THE NODES ARE PARTITIONED SPATIALLY
 			if (request.isSpatial()) {
-				logger.log(Level.INFO, "Spatial query: {0}", request.getPolygon());
+				//logger.log(Level.INFO, "Spatial query: {0}", request.getPolygon());
 				data.setSpatialProperties(new SpatialProperties(new SpatialRange(request.getPolygon())));
 			}
 
@@ -1172,7 +1257,7 @@ public class StorageNode implements RequestListener{
 				
 				int totalBlocks = 0;
 				
-				logger.info("RIKI: BLOCKPATHS: "+ blockMap);
+				logger.info("RIKI: BLOCKPATHS: "+ blockMap.size());
 				
 				for (String blockKey : blockMap.keySet()) {
 					List<String> blocks = blockMap.get(blockKey);
@@ -1181,14 +1266,14 @@ public class StorageNode implements RequestListener{
 						
 						if("roots-arizona".equals(fsName)) {
 							
-							logger.info("RIKI: DEALING WITH "+block);
+							//logger.info("RIKI: DEALING WITH "+block);
 							// ARIZONA PLOT DATA IS ACTUALLY STORED IN THE BLOCKS
 							// WE JUST RETURN THE BLOCK PATH ALONG WITH THE METADATA ASSOSSIATED WITH IT
 							// SPLIT BECAUSE IRODS PATH IS ALSO STORED SEPARATED BY $$
 							String tokens[] = block.split("\\$\\$");
 							String summaryString = fs.getSummaryDataString(tokens[0]);
 							
-							logger.info("RIKI: SUMMARY STRING: "+ summaryString);
+							//logger.info("RIKI: SUMMARY STRING: "+ summaryString);
 							
 							// RETURNING BOTH THE GALILEO AND IRODS PATH
 							//filePaths.put(block+"$$"+irodsBlockPath);

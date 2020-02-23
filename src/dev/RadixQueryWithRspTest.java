@@ -31,7 +31,7 @@ import galileo.util.GeoHash;
 
 public class RadixQueryWithRspTest implements MessageListener {
 	
-	private static boolean isQuery = true;
+	private static boolean isQuery = false;
 	
 	private static GalileoEventMap eventMap = new GalileoEventMap();
 	private static EventWrapper wrapper = new BasicEventWrapper(eventMap);
@@ -89,9 +89,10 @@ public class RadixQueryWithRspTest implements MessageListener {
 		
 		JSONObject rJSON = new JSONObject();
 		rJSON.put("kind", "galileo#plot");
-		rJSON.put("type", "series"); rJSON.put("features", "min_osavi"); 
-		rJSON.put("plotID", 19);
-		rJSON.put("filesystem", "roots");
+		rJSON.put("type", "series"); 
+		rJSON.put("features", "ndvi,irt"); 
+		rJSON.put("plotID", 20419);
+		rJSON.put("filesystem", "roots-arizona");
 		
 		reqJson = rJSON.toString();
 		
@@ -166,7 +167,7 @@ public class RadixQueryWithRspTest implements MessageListener {
 	 */
 	public static void main(String[] args1) {
 		String args[] = new String[2];
-		args[0] = "lattice-1.cs.colostate.edu";
+		args[0] = "lattice-2.cs.colostate.edu";
 		args[1] = "5635";
 		
 		if (args.length != 2) {

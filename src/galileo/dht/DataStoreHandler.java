@@ -94,17 +94,18 @@ import sun.management.Sensor;
 
 public class DataStoreHandler {
 	
-	public static String fsName = DataIngestor.fsName;
-	public static String sensorName = DataIngestor.fileSensorType;
+	//public static String fsName = DataIngestor.fsName;
+	//public static String sensorName = DataIngestor.fileSensorType;
 	public static final String IRODS_BASE_PATH_WOSLASH = "/iplant/home/radix_subterra";
 	public static final String IRODS_BASE_PATH = "/iplant/home/radix_subterra";
 	
 	private BlockingQueue<StoreMessage> unProcessedMessages;
-	private ConcurrentHashMap<Integer, TimeStampedBuffer> plotIDToChunks;
+	private ConcurrentHashMap<String, TimeStampedBuffer> plotIDToChunks;
 	private MessageHandler[] threadPool;
 	
 	// PLOT-ID -> METADATA STRING
-	private Map<Integer, String> plotsProcessed = new HashMap<>();
+	private Map<String, String> plotsProcessed = new HashMap<>();
+	
 	private static Logger logger = Logger.getLogger("galileo");
 	private StorageNode sn;
 	public ArrayList<Long> unprocessedTimes, irodsTimes, metadataTimes;
@@ -113,52 +114,90 @@ public class DataStoreHandler {
 	
 	// LAST TIME A MESSAGE WAS PROCESSED BY THE SYSTEM, EITHER LOCAL STORAGE OR STORAGE TO IRODS
 	private long lastMessageTime;
+	private long lastToLocalAction;
+	
 	private IRODSManager subterra;
 	private Connector connector;
 	private File messageLogger = new File(SystemConfig.getInstallDir()+"/throughput.txt");
 	private BufferedWriter bw;
 	
+	// TIME OF INACTIVITY FOR A PLOT AFTER WHICH ACCUMULATION FOR THAT PLOT'S DATA IS INITIATED
+	public static int plotHasBeenInactive = 10;
+	
+	// TIME OF INACTIVITY AFTER WHICH ALL PLOT DATA IS ACCUMULATED AND THEN SENT TO IRODS
 	public static int irodsCheckTimeSecs = 30;
+	public static int irodsCheckFreq = 10;
+	
+	// TIME OF INCATIVITY AFTER WHICH RIG DUMPING IS CHECKED & INITIATED
+	public static int irodsRIGCheckTimeSecs = 2*60;
+	// TIME BETWEEN IRODS ACTIVITY AFTER WHICH RIG DUMP STARTS
+	public static int irodsRIGUpdateDelay = 2*60*1000;
 	
 	public Map<String,List<String>> pathsPending = new HashMap<String,List<String>>();
 	
 	private boolean irodsInsertionStarted = false;
 	private long lastIRODSInsertionTime;
-	public static int irodsAcceptableDelay = 10*1000;
+	
 	private Timer IRODS_RIG_UPDATER = new Timer();
+	
+	private int totalLocalActionsOngoing = 0;
+	private int totalPlotsProcessed = 0;
+	
+	private NetworkDestination coordinatorNode;
 	
 	public DataStoreHandler(StorageNode sn) {
 		
 		lastMessageTime = System.currentTimeMillis();
+		lastToLocalAction = System.currentTimeMillis();
+		
+		
+		try {
+			String nodeFile = SystemConfig.getNetworkConfDir() + File.separator + "hostnames";
+			String [] hosts = new String(Files.readAllBytes(Paths.get(nodeFile))).split(System.lineSeparator());
+			coordinatorNode = new NetworkDestination(hosts[hosts.length-1].split(":")[0], Integer.parseInt(hosts[hosts.length-1].split(":")[1]));
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			logger.severe(e1.toString());
+		}
+		
 		
 		// SCHEDULE PLOT DATA BACKER AT 10 SEC INTERVALS
-		// JUST PERFORMS LOCAL BACKUP OF DATA COLLECTED
+		// JUST PERFORMS LOCAL BACKUP OF REMAINDER OF DATA IN plotIDToChunks
 		// SCRAPES WHATEVER IS LEFT IN PLOTIDTOCHUNKS AND ENSURES THAT THEY ARE SAVED
 		mapClearer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
 				
-				HashSet<Integer> toRemove = new HashSet<>();
+				
 				
 				// THIS IS FOR LOCAL STORAGE
 				synchronized (plotIDToChunks) {
-					for (Map.Entry<Integer, TimeStampedBuffer> entry : plotIDToChunks.entrySet()) {
+					HashSet<String> toRemove = new HashSet<>();
+					for (Map.Entry<String, TimeStampedBuffer> entry : plotIDToChunks.entrySet()) {
 						
+						String[] tokens = entry.getKey().split("--");
+						String sensorType = tokens[1];
+						String fsName = tokens[2];
+								
+						int plotId = Integer.valueOf(tokens[0]);
 						// IF MORE THAN 10 SECONDS HAVE PASSED SINCE NEW DATA FOR A PLOT HAS COME IN
 						// TAKE THE DATA BUFFERED FOR THAT PLOT ID FROM THE BUFFER TO LOCAL GALILEO
-						if (System.currentTimeMillis() - entry.getValue().getTimeStamp() > 10000) {
+						if (System.currentTimeMillis() - entry.getValue().getTimeStamp() > plotHasBeenInactive*1000) {
+							totalLocalActionsOngoing++;
+							totalPlotsProcessed++;
 							
 							// handleToLocal METHOD FOR THIS
 							StoreMessage irodsMsg = new StoreMessage(Type.TO_LOCAL, entry.getValue().getBuffer(), (GeospatialFileSystem) sn.getFS(fsName),
-									fsName, entry.getKey());
-							irodsMsg.setSensorType(sensorName);
+									fsName, plotId);
+							irodsMsg.setSensorType(sensorType);
 							unProcessedMessages.add(irodsMsg);
 							toRemove.add(entry.getKey());
 							
 						}
 					}
-					for (Integer pID : toRemove)
+					for (String pID : toRemove)
 						plotIDToChunks.remove(pID);
+					
 					synchronized (bw) {
 						try {
 							bw.flush();
@@ -177,39 +216,50 @@ public class DataStoreHandler {
 			@Override
 			public void run() {
 				
-				if(!irodsInsertionStarted)
+				if(!irodsInsertionStarted || pathsPending.size() == 0) {
+					//logger.info("RIKI: NOTHING TO DUMP INTO RIG YET...");
 					return;
+				}
 				
-				if(System.currentTimeMillis() - lastIRODSInsertionTime < irodsAcceptableDelay) {
+				if(System.currentTimeMillis() - lastIRODSInsertionTime < irodsRIGUpdateDelay) {
 					logger.info("RIKI: DETECTED IRODS ACTIVITY...WILL WAIT FOR IT TO STOP");
 					return;
 				}
 				logger.info("RIKI: IRODS ACTIVITY HAS STOPPED..READY TO UNLOAD PATHS");
 				
-				
-				for(String fname : pathsPending.keySet()) {
-					List<String> paths = pathsPending.get(fname);
-					
-					if(paths == null || paths.size() == 0)
-						continue;
-					
-					
-					StringBuffer sb = new StringBuffer("");
-					
-					for(String p : paths) {
-						sb.append(p+"\n");
+				synchronized(pathsPending) {
+					Set<String> toRemove = new HashSet<String>();
+					for(String key : pathsPending.keySet()) {
+						
+						List<String> paths = pathsPending.get(key);
+						String[] tokens = key.split("--");
+						String fName = tokens[0];
+						String sName = tokens[1];
+						
+						String hostName = sn.getHostName();
+						if(paths == null || paths.size() == 0)
+							continue;
+						
+						StringBuffer sb = new StringBuffer("");
+						
+						for(String p : paths) {
+							sb.append(p+"\n");
+						}
+						String timeStamp = new SimpleDateFormat("yyyy_MM_dd").format(new Date());
+						subterra.writeRemoteData(sb.toString(), fName+"/rig/idump-"+hostName+"-"+timeStamp+"-"+sName);
+						toRemove.add(key);
 					}
-					
-					subterra.writeRemoteData(sb.toString(), fname+"/rig/idump-"+fname+"-"+System.currentTimeMillis());
-					
+					pathsPending.clear();
+					//for(String k : toRemove)
+						//pathsPending.remove(k);
+					logger.info("RIKI: PENDING PATHS CLEARED: "+pathsPending.size()+" UNPROCESSED:"+unProcessedMessages.size());
+					irodsInsertionStarted = false;
 				}
-				
-				irodsInsertionStarted = false;
 			}
 		//}, 60 * 1000, 10 * 1000);
-		}, (irodsCheckTimeSecs+30)*1000, irodsCheckTimeSecs*1000);
+		}, (irodsRIGCheckTimeSecs)*1000, irodsRIGCheckTimeSecs*1000);
 		
-		// THIS IS FOR IRODS STORAGE
+		// THIS IS FOR IRODS STORAGE & FOR A COMBINED GALILEO STORAGE
 		// READS THE TEMPORARY GALILEO FILE WITH BACKED UP RECORDS AND SENDS IT TO IRODS FOR STORAGE
 		// ALSO COMBINES DATA FROM ALL PLOTS FROM ALL NODES INTO ONE NODE
 		
@@ -217,12 +267,31 @@ public class DataStoreHandler {
 			@Override
 				public void run() {
 					for(String thisFS : sn.getFSMap().keySet()) {
+						
+						// NOTHING GOING ON....
+						if(totalLocalActionsOngoing == 0 && totalPlotsProcessed == 0) {
+							//logger.info("RIKI: TOO EARLY>>>");
+							continue;
+						}
+						
+						// PLOTS BEING CURRENTLY WRITTEN....NOT NOW
+						if(totalLocalActionsOngoing > 0) {
+							//logger.info("RIKI: TOO SOON>>>");
+							continue;
+						}
+						
 						//logger.info("RIKI: IRODS INSERTION ABOUT TO START");
 						// MESSAGE PROCESSING HAS STAYED IDLE FOR MORE THAN 5 MINS
-						if (System.currentTimeMillis() - lastMessageTime >= irodsCheckTimeSecs*1000) { 
-							
-							//logger.info("RIKI: IRODS INSERTION IDLE CONDITION MET");
-							
+						
+						// NO NEW MESSAGES HAVE COME IN FOR A WHILE - irodsCheckTimeSecs
+						// THERE ARE NEW PLOTS THAT HAVE BEEN PROCESSED
+						// MAP_CLEARER HAS NOT DONE ANY LOCAL SAVE FOR A WHILE
+						//if (System.currentTimeMillis() - lastMessageTime >= irodsCheckTimeSecs*1000 && plotsProcessed!=null && plotsProcessed.size() > 0) { 
+						if (System.currentTimeMillis() - lastToLocalAction >= irodsCheckTimeSecs*1000 && plotsProcessed!=null && plotsProcessed.size() > 0) { 
+						
+							//logger.info("RIKI: IRODS INSERTION IDLE CONDITION MET "+totalLocalActionsOngoing+" "+totalPlotsProcessed);
+							totalLocalActionsOngoing = 0;
+							totalPlotsProcessed = 0;
 							//If 5 minutes has passed since last message processed, data is ready to be sent to IRODS
 							//First check if all other machines are ready				
 							try {
@@ -239,39 +308,54 @@ public class DataStoreHandler {
 										allReady = false;
 								}
 								
-								//logger.info("RIKI: NODES ARE ALL READY FOR IRODS INSERTION:"+ allReady);
+								//logger.info("RIKI: ALLREADY STATUS AFTER BROADCAST:"+ allReady);
 								//IF ALL NODES ARE READY, initiate IRODS transfer phase
 								if (allReady) {
+									
+									HashSet<String> toRemove = new HashSet<>();
+									
 									//default coordinator is last machine on list
 									// COORDINATOR IS THE NODE THAT MAINTAINS A LOCK FOR ALL PLOT IDS
 									// ONLY ONE PLOT ID CAN BE WORKED WITH AT A TIME
 									NetworkDestination coordinator = new NetworkDestination(hosts[hosts.length-1].split(":")[0], Integer.parseInt(hosts[hosts.length-1].split(":")[1]));
 									
 									// For each plot that was processed by this machine, attempt to get the lock from coordinator
-									for (Map.Entry<Integer, String> entry : plotsProcessed.entrySet()) {
-										
-										// LOCK REQUEST FOR EACH PLOT SENT TO COORDINATOR ONE AT A TIME
-										IRODSRequest reply = (IRODSRequest)connector.sendMessage(coordinator, new IRODSRequest(TYPE.LOCK_REQUEST, entry.getKey()));
-										
-										// IF LOCK FOR THE REQUESTED PLOTS IS GRANTED BY THE COORDINATOR NODE
-										// MEANS THIS NODE WILL HANDLE SUBMISSION OF ALL DATA FOR THIS PLOT
-										if (reply.getType() == TYPE.LOCK_ACQUIRED) {
+									
+									synchronized(plotsProcessed) {
+										for (Map.Entry<String, String> entry : plotsProcessed.entrySet()) {
 											
-											//logger.info("RIKI: LOCK FOR PLOT & IRODS INSERTION "+entry.getKey()+" ACQUIRED BY NODE: "+sn.getHostName());
-											//this machine gets privilege to write this plot file to IRODS.
-											//create a StoreMessage so a thread can deal with this task
+											String[] tokens = entry.getKey().split("--");
+											int plotId = Integer.valueOf(tokens[0]);
+											String sensorName = tokens[1];
+											String fsName = tokens[2];
 											
-											// handleDataRequest METHOD FOR THIS
-											StoreMessage dataRequest = new StoreMessage(Type.DATA_REQUEST, "", (GeospatialFileSystem)sn.getFS(thisFS), thisFS, entry.getKey());
-											dataRequest.setSensorType(sensorName);
+											if(!thisFS.equals(fsName))
+												continue;
 											
-											dataRequest.setFilePath(SystemConfig.getRootDir() + File.separator + thisFS+ File.separator + entry.getKey() + "/" +
-													entry.getValue().replaceAll("-", "/") + "/" + entry.getKey()+"-" + entry.getValue() + ".gblock");
-											unProcessedMessages.offer(dataRequest);
+											// LOCK REQUEST FOR EACH PLOT SENT TO COORDINATOR ONE AT A TIME
+											IRODSRequest reply = (IRODSRequest)connector.sendMessage(coordinator, new IRODSRequest(TYPE.LOCK_REQUEST, plotId));
 											
-											irodsInsertionStarted = true;
-											
+											// IF LOCK FOR THE REQUESTED PLOT IS GRANTED BY THE COORDINATOR NODE
+											// MEANS THIS NODE WILL HANDLE SUBMISSION OF ALL DATA FOR THIS PLOT
+											if (reply.getType() == TYPE.LOCK_ACQUIRED) {
+												//logger.info("RIKI: LOCK ACQUIRED FOR :"+ entry.getKey());
+												//logger.info("RIKI: LOCK FOR PLOT & IRODS INSERTION "+entry.getKey()+" ACQUIRED BY NODE: "+sn.getHostName());
+												//this machine gets privilege to write this plot file to IRODS.
+												//create a StoreMessage so a thread can deal with this task
+												
+												// handleDataRequest METHOD FOR THIS
+												StoreMessage dataRequest = new StoreMessage(Type.DATA_REQUEST, "", (GeospatialFileSystem)sn.getFS(thisFS), thisFS, plotId);
+												dataRequest.setSensorType(sensorName);
+												
+												dataRequest.setFilePath(SystemConfig.getRootDir() + File.separator + thisFS+ File.separator + plotId + "/" +
+														entry.getValue().replaceAll("-", "/") + "/" + plotId+"-" + entry.getValue() + ".gblock");
+												unProcessedMessages.offer(dataRequest);
+											}
+											toRemove.add(entry.getKey());
 										}
+										
+										for (String pID : toRemove)
+											plotsProcessed.remove(pID);
 									}
 								}
 							} catch (IOException | InterruptedException e) {
@@ -280,7 +364,7 @@ public class DataStoreHandler {
 						}
 					}
 				}
-		}, (irodsCheckTimeSecs)*1000, irodsCheckTimeSecs*1000); //300 seconds = 5 minutes
+		}, (irodsCheckFreq)*1000, irodsCheckFreq*1000); //300 seconds = 5 minutes
 		
 		unProcessedMessages = new PriorityBlockingQueue<>();
 		plotIDToChunks = new ConcurrentHashMap<>(100, .9f, 10);
@@ -352,9 +436,7 @@ public class DataStoreHandler {
 					long start = System.currentTimeMillis();
 					switch(toProcess.getType()){			
 						case UNPROCESSED:
-							fsName = toProcess.getFSName();
-							sensorName = toProcess.getSensorType();
-							//logger.info("RIKI: ABOUT TO PROCESS AN UNPROCESSED MESSAGE "+toProcess.getSensorType()+" "+toProcess.getFSName());
+							//logger.info("RIKI: UNPROCESSED MESSAGE "+toProcess.getSensorType()+" "+toProcess.getFSName());
 							handleUnprocessed(toProcess);
 							long end = System.currentTimeMillis() - start;
 							synchronized(unprocessedTimes) {
@@ -363,6 +445,7 @@ public class DataStoreHandler {
 							lastMessageTime = System.currentTimeMillis();
 							break;
 						case TO_LOCAL:
+							//logger.info("RIKI: TOLOCAL MESSAGE "+toProcess.getSensorType()+" "+toProcess.getFSName());
 							handleToLocal(toProcess);
 							end = System.currentTimeMillis() - start;
 							synchronized(irodsTimes) {
@@ -403,6 +486,9 @@ public class DataStoreHandler {
 			Calendar cal = Calendar.getInstance();
 			String lineSep = System.lineSeparator();
 			String [] lines = data.split(System.lineSeparator());
+			
+			//logger.info("RIKI: HANDLING UNPROCESSED DATA OF SIZE: " + lines.length);
+			
 			GeospatialFileSystem gfs = msg.getFS();
 			HashMap<NodeInfo, String> otherDests = new HashMap<>();//to be used for mapping data points to other destinations
 			HashGrid grid = gfs.getGlobalGrid();
@@ -421,9 +507,15 @@ public class DataStoreHandler {
 			
 			for (String line : lines) {
 				
+				if(line.trim().isEmpty())
+					continue;
+				String lineTokens[] = line.split(",");
+				
+				if(lineTokens.length < indices[0] || lineTokens.length < indices[1])
+					continue;
 				// LAT-LON INDICES ARE INVERTED FOR HASHGRID
-				double lat = Double.parseDouble(line.split(",")[indices[1]]);
-				double lon = Double.parseDouble(line.split(",")[indices[0]]);
+				double lat = Double.parseDouble(lineTokens[indices[1]]);
+				double lon = Double.parseDouble(lineTokens[indices[0]]);
 				Coordinates coords = new Coordinates(lat, lon);
 				
 				int plotID;
@@ -444,26 +536,27 @@ public class DataStoreHandler {
 				
 				if (dest.getHostname().equals(sn.getHostName()) || dest.getHostname().equals(sn.getCanonicalHostName())) {
 						// INSERT INTO THE PLOTIDTOCHUNKS MAP
-						plotIDToChunks.computeIfAbsent(plotID, k -> new TimeStampedBuffer(new StringBuilder()));
-						plotIDToChunks.get(plotID).update(line+lineSep);
+						String plotKey = plotID+"--"+sensorType+"--"+msg.getFSName();
+						plotIDToChunks.computeIfAbsent(plotKey, k -> new TimeStampedBuffer(new StringBuilder()));
+						plotIDToChunks.get(plotKey).update(line+lineSep);
 						
 						// IF NUMBEROF LINE FOR THIS PLOT CROSSES 500, CREATE AN IRODS MESSAGE OUT OF THEM,
 						// OTHERWISE KEEP ADDING THEM TO THE BUFFER
-						synchronized(plotIDToChunks.get(plotID)) {
+						synchronized(plotIDToChunks) {
 							
 							// WHEN THERE ARE MORE THAN 500 RECORDS FOR A PLOT, ATTEMPT TO STORE IT IN LOCAL GALILEO
 							// OTHERWISE PERSIST IT IN plotIDToChunks
-							if (plotIDToChunks.get(plotID) != null && plotIDToChunks.get(plotID).getBuffer().split(lineSep).length >= 500) {//this threshold is subject to change!
+							if (plotIDToChunks.get(plotKey) != null && plotIDToChunks.get(plotKey).getBuffer().split(lineSep).length >= DataIngestor.CHUNK_SIZE) {//this threshold is subject to change!
 								//add to existing block for the plot identified
 								// THIS IS BEING STORED IN LOCAL, ALTHOUGH IT SAYS IRODS MSG
 								//logger.info("RIKI: OP1 ");
-								StoreMessage localNIrodsStorageMsg = new StoreMessage(Type.TO_LOCAL, plotIDToChunks.get(plotID).getBuffer(), gfs, msg.getFSName(), plotID);
+								StoreMessage localNIrodsStorageMsg = new StoreMessage(Type.TO_LOCAL, plotIDToChunks.get(plotKey).getBuffer(), gfs, msg.getFSName(), plotID);
 								
 								localNIrodsStorageMsg.setSensorType(sensorType);
 								//logger.info("RIKI: I AM HERE "+localNIrodsStorageMsg.getSensorType());
 								
 								unProcessedMessages.add(localNIrodsStorageMsg);
-								plotIDToChunks.remove(plotID);
+								plotIDToChunks.remove(plotKey);
 							}
 						}
 						
@@ -487,8 +580,10 @@ public class DataStoreHandler {
 						int dayOfMonth = cal.get(Calendar.DAY_OF_MONTH);
 						
 						// PLOTS PROCESSED MAPPED TO THE DATE AND SENSOR THEY HOLD
-						plotsProcessed.put(plotID, year+"-"+month+"-"+dayOfMonth+"-"+sensorType);
-
+						synchronized(plotsProcessed) {
+							plotsProcessed.put(plotKey, year+"-"+month+"-"+dayOfMonth+"-"+sensorType);
+						}
+						
 				} else {//the observation is to be stored on a machine other than this one
 					//logger.info("RIKI: OP2 ");
 					// MAPPING THE OTHER LINES TO THEIR RESPECTIVE NODES
@@ -498,6 +593,9 @@ public class DataStoreHandler {
 						otherDests.put(dest, otherDests.get(dest)+line+lineSep);
 				}
 			}
+			
+			//logger.info("RIKI: plotsProcessed SIZE AFTER MSG MAPPING: "+plotsProcessed.size());
+			
 			for(Map.Entry<NodeInfo,String> entry : otherDests.entrySet()) {
 				try {
 					//logger.info("RIKI: IS THIS IT?? "+msg.getSensorType());
@@ -536,20 +634,21 @@ public class DataStoreHandler {
 		 */
 		private void handleDataRequest(StoreMessage msg) {
 			try {
-				//logger.info("RIKI: HANDLING: "+msg.getFilePath());
 				
-				String sensorType = getSensorTypeFromPath(msg.getFilePath());
+				String fsName = msg.getFSName();
+				//String sensorType = getSensorTypeFromPath(msg.getFilePath());
+				String sensorType = msg.getSensorType();
 				
 				IRODSRequest dataRequest = new IRODSRequest(TYPE.DATA_REQUEST, msg.getPlotID());
 				dataRequest.setFs(msg.getFSName());
 				dataRequest.setFilePath(msg.getFilePath());
 				
+				//logger.info("RIKI: BEFORE HANDLEDATAREQUEST BROADCAST");
 				// ASKING OTHER NODES FOR DATA REGARDING THIS PLOT
 				// SINCE THIS NODE HAS RECEIVED PERMISSION TO SUBMIT ALL DATA FOR THIS PLOT
 				List<Event> responses = broadcastEvent(dataRequest, this.connector);
-				
+				//logger.info("RIKI: AFTER HANDLEDATAREQUEST BROADCAST");
 				StringBuilder plotData = new StringBuilder();
-				
 				
 				SummaryStatistics ss = null;
 				int cnt = 0;
@@ -571,6 +670,7 @@ public class DataStoreHandler {
 				}
 				
 				File localPlotData = new File(msg.getFilePath());
+				//logger.info("RIKI: DEALING WITH FILEPATH :"+msg.getFilePath());
 				String localContents = new String(Files.readAllBytes(Paths.get(localPlotData.getAbsolutePath())));
 				
 				if(msg.getFSName().equals("roots-arizona")) {
@@ -587,6 +687,7 @@ public class DataStoreHandler {
 				
 				// NOW LOCALPLOTDATA HAS ALL THE DATA IN IT
 				localContents = plotData.toString().replaceAll("(?m)^\\s", "");//remove any extraneous new lines that found their way in
+				//logger.info("RIKI: ALL RELEVANT PLOT DATA HAVE BEEN ACCUMULATED "+localPlotData);
 				
 				// ALL DATA RELATED TO THIS PLOT FROM ALL NODES ON THIS NODE
 				
@@ -638,40 +739,69 @@ public class DataStoreHandler {
 				
 				// RIKI ACTUAL WRITING TO IRODS
 				//logger.info("RIKI: COULD HAVE SENT TO IRODS, BUT DIDNT");
-				
+				//logger.info("RIKI: HANDLING BACKUP: "+localPlotData+" "+msg.getPlotID());
 				//Send off to IRODS
+				boolean stats = false;
 				if (msg.getPlotID() > 0) {
 					try {
-						subterra.writeRemoteFile(localPlotData, this);
+						stats = subterra.writeRemoteFile(localPlotData, this);
+						
+						if(stats)
+							logger.info("RIKI: IRODS BACKUP SUCCESSFUL FOR "+localPlotData);
+						else 
+							logger.info("RIKI: IRODS BACKUP FAILED FOR "+localPlotData);
 					} catch (JargonException e1) {
 						logger.severe("RIKI: IRODS SENDING ENCOUNTERED "+ e1);
 					}
-				}
 				
-				lastIRODSInsertionTime = System.currentTimeMillis();
-				
-				long crcVal = RadixIntegrityGraph.getChecksumFromData(sortedPlotData);
-				/*Adler32 a1 = new Adler32();
-				a1.update(sortedPlotData.getBytes());*/
-				
-				String actPath = localPlotData.getAbsolutePath().replaceAll(SystemConfig.getRootDir(),"");
-				
-				List<String> pPaths = new ArrayList<String>();
-				
-				synchronized(pathsPending) {
+					//logger.info("RIKI: SENDING TO IRODS>>" + lastIRODSInsertionTime+" "+localPlotData);
+					lastIRODSInsertionTime = System.currentTimeMillis();
+					irodsInsertionStarted = true;
 					
-					if(pathsPending.get(fsName) == null)
-						pathsPending.put(fsName,pPaths);
-					else { 
-						pPaths = pathsPending.get(fsName);
+					long crcVal = RadixIntegrityGraph.getChecksumFromData(sortedPlotData);
+					/*Adler32 a1 = new Adler32();
+					a1.update(sortedPlotData.getBytes());*/
+					
+					String actPath = localPlotData.getAbsolutePath().replaceAll(SystemConfig.getRootDir(),"");
+					
+					List<String> pPaths = new ArrayList<String>();
+					
+					String key = fsName+"--"+sensorType;
+					
+					if(stats) {
+						synchronized(pathsPending) {
+							
+							if(pathsPending.get(key) == null)
+								pathsPending.put(key,pPaths);
+							else { 
+								pPaths = pathsPending.get(key);
+							}
+							pPaths.add(IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
+							//logger.info("RIKI: IRODS PATH FOR RIG: "+IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
+						}
 					}
-					pPaths.add(IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
-					//logger.info("RIKI: IRODS PATH FOR RIG: "+IRODS_BASE_PATH_WOSLASH+actPath+"$$"+ crcVal);
 				}
 				
 				
 			} catch (IOException | InterruptedException e) {
 				logger.severe("Error on broadcasting a data request for plot " + msg.getPlotID() + " " + e);
+			} finally {
+				try {
+					IRODSRequest reply = (IRODSRequest)connector.sendMessage(coordinatorNode, new IRODSRequest(TYPE.LOCK_RELEASE_REQUEST, msg.getPlotID()));
+					if(reply.getType() == TYPE.LOCK_RELEASED) {
+						//logger.info("LOCK RELEASED FOR "+msg.getPlotID());
+					} else {
+						logger.info("LOCK RELEASE REJECTED FOR "+msg.getPlotID());
+						IRODSRequest reply1 = (IRODSRequest)connector.sendMessage(coordinatorNode, new IRODSRequest(TYPE.LOCK_RELEASE_REQUEST, msg.getPlotID()));
+						if(reply1.getType() != TYPE.LOCK_RELEASED) {
+							logger.info("LOCK RELEASE REJECTED TWICE FOR " + msg.getPlotID());
+						}
+					}
+				} catch (Exception e) {
+					logger.severe("LOCK RELEASE FAILED FOR " + msg.getPlotID());
+					e.printStackTrace();
+				} 
+				
 			}
 		}
 		
@@ -689,6 +819,7 @@ public class DataStoreHandler {
 			//with all other data of the same plot.
 			GeospatialFileSystem fs = msg.getFS();
 			
+			//logger.info("RIKI: ABOUT TO TRY TO MAKE A LOCAL SAVE");
 			String sensorType = msg.getSensorType();
 			
 			int[] indices = fs.getConfigs().getIndices(sensorType);
@@ -772,6 +903,7 @@ public class DataStoreHandler {
 				if(sensorType.equals("vanilla")) {
 					msg.getFS().storeBlock(block);
 				} else {
+					//logger.info("RIKI: ABOUT TO LOCAL SAVE FOR "+irodsStoragePath);
 					msg.getFS().storeBlockArizona(block, sensorType, summary, irodsStoragePath);
 				}
 				
@@ -796,7 +928,10 @@ public class DataStoreHandler {
 				*/
 				
 			} catch (ParseException | FileSystemException | IOException e) {
-				logger.severe("Error extracting metadata and storing." + Arrays.toString(e.getStackTrace()));
+				logger.severe("Error extracting metadata and storing." + Arrays.toString(e.getStackTrace()) + e.getMessage());
+			} finally {
+				lastToLocalAction = System.currentTimeMillis();
+				totalLocalActionsOngoing--;
 			}
 		}
 		
@@ -1029,7 +1164,7 @@ public class DataStoreHandler {
 		}
 		
 		// THIS IS JUST BACKUP
-		private Metadata createMeta(int plotID, String data, int temporalIndex, boolean isEpoch, int[] indices, String sensorType) throws ParseException {
+		private Metadata createMeta(int plotID, String data, int temporalIndex, boolean isEpoch, int[] indices, String sensorType, String fsName) throws ParseException {
 			
 			Metadata meta = new Metadata();
 			String[] dataLines = data.split(System.lineSeparator());
@@ -1224,6 +1359,14 @@ public class DataStoreHandler {
 		public long getTimeStamp() {
 			return this.timestamp;
 		}
+	}
+
+
+	public void removePlotEntry(String key) {
+		synchronized(plotsProcessed) {
+			plotsProcessed.remove(key);
+		}
+		
 	}
 	
 	/*
