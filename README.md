@@ -1,29 +1,42 @@
-<p align="center">
-  <img width="300" height="300" src="apple-touch-icon-precomposed.png">
-</p>
+# SILO
 
-# Radix: High-throughput Georeferencing for Observational Data
+SILO is a framework designed for the ROOTS-Subterra project that handles the efficient and high-throughput pre-processing, ingestion, storage, retrieval and analytics over large-scale heterogeneous sensor data in a distributed manner. For more details about the project, click [here].
 
-Radix is a high-throughput georeferencing and data storage pipeline written in Java 8. It is designed to process large volumes of spatial data. The current version supports data in CSV format. Key features of the system include:
-- High rate of data ingestion
-- Ability to visualize/query data from the web-based interface
-- Simple charting to visualize data trends over time
-- Interface can be dockerized to run on any platform
-- Data archival in Cyverse's IRODS
+The SILO framework consists of the following components:
+1)	A Front-end Visualization Framework [Link]
+2)	Back-end Distributed Storage System for Pre-processing, Storage & Retrieval
+3)	Command-based Customizable Data Retrieval for the user with Integrity Check [Link]
 
-The current version is pre-packaged as a Java Archive file, and directory structures are preserved from the original setup here. In the current state, there is a significant amount of unnecessary software included in this repository. This is due to re-use of some code from other applications and fearing breaking dependencies by removing code.
+## Introduction
+
+This repository contains the source code and deployment instructions for the SILO DHT, which is the 2nd component in the list, which is built on top of the RADIX distributed storage system detailed [here](https://ieeexplore.ieee.org/abstract/document/8672229). 
+
+The system is built in the form of a zero-hop DHT built over a cluster nodes, where any of the nodes in the cluster can handle data pre-processing, ingestion, geo-referencing, and the redirection of the data records to their relevant nodes. On top of that, the system also handles metadata extraction for fast visual analytics as well as periodic backup of the stored data to a highly available storage for scientific data (Cyverse IRODS).
 
 ## Requirements
-- Linux based OS
-- Java 8
-- Apache Tomcat
-- Netcat Utility Tool
-- (Optional) Docker
-### For Web-based Interface
-- Python 2.7
-- Django
-- MySQL Database
-- Apache HTTP Server
+-  Linux based OS
+-  Java 8
+-  Netcat Utility Tool
+
+## Deployment
+Download this repository and save them at a shared NFS directory for the machines in your cluster. 
+
+
+
+
+### Configuration
+
+The following are the config files that need to be updated in accordance to your cluster requirements:
+
+
+|Config File|  Description  |Relative Path|
+| --------- |:-------------:| -----------:|
+|hostnames & 0.group | These two files should be identical and should contain the names of the the hostmachines in the cluster in the format <hostname>:<port>, where <port> can be any available port.	/galileo/config/network
+|prepareFS_az.java	This file can be used to pass specialized configuration parameters for individual filesystem being housed in the distributed storage. You may need to update this java file and run it with your own filesystem configuration to properly create your filesystem. | /src/dev
+|plots_arizona.json | This contains the shapefile for the plots from which sensor data is collected. This shapefile is internally used by SILO to geo-reference ingested sensor data to their corresponding plots. The path to your plots shapefile is to be provided as an argument as shown in the prepareFS.java example. | N/A
+
+
+
 
 ## Installation and Deployment
 1. Download the Radix bundle and unpack it to the desired install location
