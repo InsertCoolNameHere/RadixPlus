@@ -558,7 +558,7 @@ public class StorageNode implements RequestListener{
 		if (fsName != null) {
 			GeospatialFileSystem gfs = (GeospatialFileSystem) fsMap.get(fsName);
 			if (gfs != null) {
-				//logger.info("RIKI: STORE MSG1: "+fsName+" "+request.getSensorType());
+				//logger.info("RIKI: NB STORE MSG1: "+fsName+" "+request.getSensorType());
 				// THIS IS A SINGLE CHUNK'S DATA COMING IN FOR PROCESSING
 				StoreMessage msg = new StoreMessage(Type.UNPROCESSED, request.getData(), gfs, fsName, request.getSensorType());
 				msg.setCheckAll(request.checkAll());

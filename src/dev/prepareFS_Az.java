@@ -80,7 +80,7 @@ public class prepareFS_Az {
 		fsc.setSw("9tbkh400000");
 		
 		// ALL ATTRIBUTES FOR VIZUALIZATION
-		fsc.setAllAttributes("ndvi$sonar$thermal$lidar");
+		fsc.setAllAttributes("ndvi$sonar$irt$lidar");
 		
 		// GRID FILE PATH
 		fsc.setGridFilePath("/s/chopin/b/grad/sapmitra/Documents/arizona/cleanData/Roots_2018/F2 TRoots Planting/plots_arizona.json");

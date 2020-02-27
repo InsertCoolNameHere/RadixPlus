@@ -30,10 +30,15 @@ software, even if advised of the possibility of such damage.
  * to "davos.cyverse.org" below.*/
 package galileo.dht;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -43,7 +48,11 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
+import java.util.zip.GZIPOutputStream;
 
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.utils.IOUtils;
 import org.apache.commons.io.FileUtils;
 import org.irods.jargon.core.connection.IRODSAccount;
 import org.irods.jargon.core.exception.DataNotFoundException;
@@ -484,16 +493,6 @@ public class IRODSManager {
 		System.out.println(readAllRemoteFiles.length);
 	}
 	
-	public static void main(String arg[]) throws JargonException, IOException {
-		
-		IRODSManager im = new IRODSManager();
-		//File f = new File("/s/chopin/b/grad/sapmitra/Documents/radix/ABC.csv");
-		//im.initRIGPath("roots-arizona");
-		
-		System.out.println(im.checkExists("roots-arizona/rig"));
-		
-	}
-	
 	private boolean checkExists(String remoteDirectory) {
 		
 		logger.info("RIKI: Checking RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
@@ -576,5 +575,110 @@ public class IRODSManager {
 		dataTransferOperationsAO.getOperation(toFetch, temp, tscl, tcb);
 		
 	}
+	
+	/**
+	 * CREATES A TAR FILE OUT OF THE CONTENTS
+	 * @author sapmitra
+	 * @param toExport
+	 * @param remoteDirectory
+	 * @throws JargonException
+	 */
+	public void tarOnGalileoAndUntarOnIrods(File toExport, String remoteDirectory) throws JargonException {
+		
+		writeRemoteFileAtSpecificPath(toExport, remoteDirectory);
+		
+	}
+	
+	/**
+	 * COMPRESS THE CONTENTS OF THE sourceDir folder into the destinationDir LOCATIONS
+	 * @author sapmitra
+	 * @param sourceDir THE DIRECTOORY YOU WANT COMPRESSED
+	 * @param destinationDir THE DESTINATION FOLDER WHERE YOU WANT THE roots-arizona.tar.gz STORED
+	 */
+	private void createTarFile(String sourceDir, String destinationDir, String fsName) {
+		
+		String destFilePath = destinationDir+GALILEO_SEPARATOR+fsName+".tar.gz";
+		
+		Path path = Paths.get(destFilePath);
+		
+		
+		File temp = new File(destFilePath);
+
+		try {
+			if (temp.exists()) {
+				temp.delete();
+			}
+			Files.deleteIfExists(path);
+			
+		} catch (IOException e) {
+			
+		}
+		
+		
+		File resultsDir = new File(destinationDir);
+		
+		if (!resultsDir.exists())
+			resultsDir.mkdirs();
+		
+		
+		TarArchiveOutputStream tarOs = null;
+		
+		try {
+			
+			FileOutputStream fos = new FileOutputStream(destFilePath);
+			GZIPOutputStream gos = new GZIPOutputStream(new BufferedOutputStream(fos));
+			tarOs = new TarArchiveOutputStream(gos);
+			addFilesToTarGZ(sourceDir, "", tarOs);
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			try {
+				tarOs.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	
+	
+	public void addFilesToTarGZ(String filePath, String parent, TarArchiveOutputStream tarArchive) throws IOException {
+		File file = new File(filePath);
+		// Create entry name relative to parent file path
+		String entryName = parent + file.getName();
+		// add tar ArchiveEntry
+		tarArchive.putArchiveEntry(new TarArchiveEntry(file, entryName));
+		if (file.isFile()) {
+			FileInputStream fis = new FileInputStream(file);
+			BufferedInputStream bis = new BufferedInputStream(fis);
+			// Write file content to archive
+			IOUtils.copy(bis, tarArchive);
+			tarArchive.closeArchiveEntry();
+			bis.close();
+		} else if (file.isDirectory()) {
+			// no need to copy any content since it is
+			// a directory, just close the outputstream
+			tarArchive.closeArchiveEntry();
+			// for files in the directories
+			for (File f : file.listFiles()) {
+				// recursively call the method for all the subdirectories
+				addFilesToTarGZ(f.getAbsolutePath(), entryName + File.separator, tarArchive);
+			}
+		}
+	}
+	
+	public static void main(String arg[]) throws JargonException, IOException {
+		
+		IRODSManager im = new IRODSManager();
+		//File f = new File("/s/chopin/b/grad/sapmitra/Documents/radix/ABC.csv");
+		//im.initRIGPath("roots-arizona");
+		
+		im.createTarFile("/s/chopin/b/grad/sapmitra/Desktop/tempOutput", "/tmp/sapmitra", "roots-arizona");
+		
+	}
+	
 	
 }

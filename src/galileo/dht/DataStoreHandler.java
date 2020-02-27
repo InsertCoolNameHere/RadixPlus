@@ -143,6 +143,9 @@ public class DataStoreHandler {
 	private int totalLocalActionsOngoing = 0;
 	private int totalPlotsProcessed = 0;
 	
+	private int numUnprocessed = 0;
+	private int allowedUnprocessed = 5;
+	
 	private NetworkDestination coordinatorNode;
 	
 	public DataStoreHandler(StorageNode sn) {
@@ -744,8 +747,9 @@ public class DataStoreHandler {
 				boolean stats = false;
 				if (msg.getPlotID() > 0) {
 					try {
+						logger.info("RIKI: >>>>>>>>>>>>>>>>>>>>>>>>>"+localPlotData);
 						stats = subterra.writeRemoteFile(localPlotData, this);
-						
+						logger.info("RIKI: <<<<<<<<<<<<<<<<<<<<<<<<< "+localPlotData);
 						if(stats)
 							logger.info("RIKI: IRODS BACKUP SUCCESSFUL FOR "+localPlotData);
 						else 

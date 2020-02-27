@@ -377,6 +377,8 @@ public class DataIngestor extends Thread{
 	        }
 	        private void sendMessage(byte[] message, NodeInfo dest, boolean checkAll, String fsName1, String fileSensorType1) throws IOException {
 	        	NonBlockStorageRequest request = new NonBlockStorageRequest(message, fsName1, fileSensorType1);
+	        	
+	        	logger.info("RIKI: CHUNK PROPS: "+fsName+" "+fileSensorType+" "+dest);
 	        	request.setCheckAll(checkAll);
 	        	messageRouter.sendMessage(dest, EventPublisher.wrapEvent(request));
 	   		 
@@ -384,6 +386,7 @@ public class DataIngestor extends Thread{
 	        
 	        public void kill() {
 	        	alive = false;
+	        	
 	        }
 	        
 	        public void run() {
@@ -396,7 +399,14 @@ public class DataIngestor extends Thread{
 	        	//logger.info("RIKI: GRID INIT SUCCESS...");
 	        	while(alive) {
 					try {
-						String data = master.queue.take();
+						String data = null;
+						synchronized(master.queue) {
+							if(master.queue.size() > 0)
+								data = master.queue.take();
+						}
+						
+						if(data == null)
+							continue;
 						
 						//logger.info("RIKI: DEALING WITH CHUNK OF SIZE: "+ data.split("\n").length);
 						
@@ -447,6 +457,7 @@ public class DataIngestor extends Thread{
 						logger.severe("Error trying to stamp. " + Arrays.toString(e.getStackTrace()));
 					}
 		        }
+	        	logger.info("RIKI: THREAD EXIT");
 	        }
 	    }
 
