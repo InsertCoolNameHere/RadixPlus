@@ -3,9 +3,9 @@
 RADIX+ is a framework designed for the ROOTS-Subterra project that handles the efficient and high-throughput pre-processing, ingestion, storage, retrieval and analytics over large-scale heterogeneous sensor data in a distributed manner. For more details about the project, click [here].
 
 The RADIX+ framework consists of the following components:
-1)	A Front-end Visualization Framework [Link]
+1)	A Front-end Visualization Framework [Link](http://radix.cs.colostate.edu/)
 2)	Back-end Distributed Storage System for Pre-processing, Storage & Retrieval
-3)	Command-based Customizable Data Retrieval for the user with Integrity Check [Link]
+3)	Command-based Customizable Data Retrieval for the user with Integrity Check [Link](https://bitbucket.org/InsertCoolNameHere/rig/)
 
 ## Introduction
 
