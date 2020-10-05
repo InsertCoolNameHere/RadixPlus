@@ -102,7 +102,7 @@ public class IRODSManagerTest {
 	public IRODSManagerTest() {	//davos.cyverse.org
 									//host, port, userName, password, homeDirectory, userZone, defaultStorageResource
 		//account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home/radix_subterra", "iplant", "");
-		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home/radix_subterra", "iplant", "");
+		account = new IRODSAccount("data.iplantcollaborative.org", 1247, System.getenv("IRODS_USER"), System.getenv("IRODS_PASSWORD"), "/iplant/home/radix_subterra", "iplant", "");
 		try {
 			filesystem = IRODSFileSystem.instance();
 			fileFactory = filesystem.getIRODSFileFactory(account);

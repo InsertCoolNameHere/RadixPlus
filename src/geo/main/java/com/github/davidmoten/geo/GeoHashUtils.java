@@ -1,5 +1,7 @@
 package geo.main.java.com.github.davidmoten.geo;
 
+import java.io.File;
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -23,9 +25,13 @@ package geo.main.java.com.github.davidmoten.geo;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+
+import galileo.dataset.Coordinates;
+import galileo.util.GeoHash;
 /**
  * This class was originally adapted from Apache Lucene's GeoHashUtils.java. Please note that this class retains the
  * original licensing (as required), which is different from other classes contained in this project, which are MIT
@@ -163,10 +169,34 @@ public class GeoHashUtils {
         return new double[] { latInterval[0], latInterval[1], lonInterval[0], lonInterval[1] };
     }
     
+    
     public static void main(String arg[]) {
+    	System.out.println(GeoHash.decodeHash("9tbkh5m3"));
+    	System.out.println(GeoHash.decodeHash("9tbkh5m8"));
     	
-    	double[] decode_bbox = decode_bbox("9xb4");
-    	System.out.println("HAPPY");
+    }
+    public static void main1(String arg[]) {
+    	// (33.064443019694764f, -111.964975382f), (33.0644430196937f, -111.96499170149933f), (33.06442054969379f, -111.96499146649519f), (33.06442054969485f, -111.964975147f), (33.064443019694764f, -111.964975382f)
+    	Coordinates c11 = new Coordinates(33.064443019694764f, -111.964975382f);
+		Coordinates c21 = new Coordinates(33.0644430196937f, -111.96499170149933f);
+		Coordinates c31 = new Coordinates(33.06442054969379f, -111.96499146649519f);
+		Coordinates c41 = new Coordinates(33.06442054969485f, -111.964975147f);
+		Coordinates c51 = new Coordinates(33.064443019694764f, -111.964975382f);
+		List<Coordinates> cl1 = new ArrayList<Coordinates>();
+		cl1.add(c11);
+		cl1.add(c21);
+		cl1.add(c31);
+		cl1.add(c41);
+		cl1.add(c51);
+    	double [][] coordArr = new double[cl1.size()][2];
+		for (int i = 0; i < cl1.size(); i++) {
+			coordArr[i] = new double[] {cl1.get(i).getLongitude(), cl1.get(i).getLatitude()};
+		}
+		
+		
+    	System.out.println(geoHashesForPolygon(8, coordArr).size());
+    	
+    	
     }
 
     /**
@@ -485,6 +515,7 @@ public class GeoHashUtils {
         // now lets generate all geohashes for the containing bounding box
         
         // START WITH THE BOTTOM-LEFT GEOHASH
+        // SOUTH-WEST MOST GEOHASH
         String rowHash = encode(bbox[0], bbox[2], hashLength);
         
         // RETURNS minLat, maxLat, minLon, maxLon FOR GIVEN GEOHASH

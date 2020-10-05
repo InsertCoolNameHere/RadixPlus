@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Main-Class: galileo.dht.StorageNode
+Built-By: sapmitra
+Class-Path: /s/chopin/b/grad/sapmitra/workspace/radix/lib/*
+

@@ -23,6 +23,7 @@ import galileo.comm.QueryRequest;
 import galileo.comm.QueryResponse;
 import galileo.dataset.Coordinates;
 import galileo.dataset.feature.Feature;
+import galileo.dht.Partitioner;
 import galileo.event.BasicEventWrapper;
 import galileo.event.Event;
 import galileo.event.EventWrapper;
@@ -39,7 +40,9 @@ import galileo.util.GeoHash;
 
 public class RadixArizonaQueryWithRspTest implements MessageListener {
 	
-	private static int isQuery = 2;
+	private static int isQuery = 0;
+	
+	public static long start = 0;
 	
 	private static GalileoEventMap eventMap = new GalileoEventMap();
 	private static EventWrapper wrapper = new BasicEventWrapper(eventMap);
@@ -56,13 +59,13 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 	public void onMessage(GalileoMessage message) {
 		try {
 			
-			System.out.println("RESPONSE RECEIVED...");
+			System.out.println("RESPONSE RECEIVED..." + (System.currentTimeMillis() - start));
 			
 			if (isQuery == 0) {
 				QueryResponse response = (QueryResponse) wrapper.unwrap(message);
 				
 				System.out.println("RESPONSE\n=============\n");
-				System.out.println(response.getJSONResults().toString());
+				System.out.println(response.getJSONResults().get("totalNumPaths"));
 			} else if (isQuery == 1){
 				MetadataResponse response = (MetadataResponse) wrapper.unwrap(message);
 
@@ -101,9 +104,9 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 		
 		JSONObject rJSON = new JSONObject();
 		rJSON.put("kind", "galileo#plot");
-		rJSON.put("type", "series"); rJSON.put("features", "min_osavi"); 
-		rJSON.put("plotID", 19);
-		rJSON.put("filesystem", "roots");
+		rJSON.put("type", "series");
+		rJSON.put("plotID", 9971);
+		rJSON.put("filesystem", "roots-arizona");
 		
 		reqJson = rJSON.toString();
 		
@@ -134,7 +137,7 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 			messageRouter.addListener(vqt);
 			
 			//for(int i=0 ;i < 10; i++) {
-				
+				start = System.currentTimeMillis();
 				gc.sendMessage(targetNode, vr);
 				
 			//}
@@ -147,32 +150,41 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 	}
 	
 	private static Event createPolygonRequest() {
+		//-111.96569161279297 -111.96481223242188 33.06369681494141 33.065075920654294
+
+		/*
+		 * Coordinates c11 = new Coordinates(33.064443019694764f, -111.964975382f);
+		 * Coordinates c21 = new Coordinates(33.0644430196937f, -111.96499170149933f);
+		 * Coordinates c31 = new Coordinates(33.06442054969379f, -111.96499146649519f);
+		 * Coordinates c41 = new Coordinates(33.06442054969485f, -111.964975147f);
+		 */
 		//33.061982, -111.970253
 		//(40.65319061279297, -104.9959945678711), (40.653018951416016, -104.99565124511719)
 		//(33.06200408935547, -111.96910095214844), (33.06132125854492, -111.96910095214844), (33.06132125854492, -111.96965026855469), (33.06200408935547, -111.96965026855469)
-		float lat1 = 33.061851f;
-		float lat2 = 33.061588f;
+		float lat2 = 33.06507110595703f;
+		float lat1 = 33.0637f;
 		//33.060944, -111.970672
-		float lon1 = -111.969627f;
-		float lon2 = -111.969301f;
+		float lon2 = -111.96490314941406f;
+		float lon1 = -111.96554647216797f;
 		
 		
-		Coordinates c1 = new Coordinates(lat2, lon1);
-		Coordinates c2 = new Coordinates(lat2, lon2);
-		Coordinates c3 = new Coordinates(lat1, lon2);
-		Coordinates c4 = new Coordinates(lat1, lon1);
-		//Coordinates c5 = new Coordinates(36.78f, -107.64f);
+		Coordinates c1 = new Coordinates(lat2, lon2);
+		Coordinates c2 = new Coordinates(lat2, lon1);
+		Coordinates c3 = new Coordinates(lat1, lon1);
+		Coordinates c4 = new Coordinates(lat1, lon2);
 		
 		List<Coordinates> cl = new ArrayList<Coordinates>();
-		cl.add(c1); cl.add(c2); cl.add(c3); cl.add(c4);
+		cl.add(c1); cl.add(c2); cl.add(c3); cl.add(c4); 
+		
+		System.out.println("WE GOT:"+GeoHash.getIntersectingGeohashes(cl, 8).length);
 		
 		//GeoHash.decodeHash("9xjr6b8m");
 		
 		//System.out.println(GeoHash.getIntersectingGeohashes(cl, 8));
 		
 		QueryRequest qr = new QueryRequest("roots-arizona", cl);
-		qr.setSensorName("irt");
-		qr.setTime("2018-09-28-xx");
+		qr.setSensorName("lidar");
+		qr.setTime("2018-08-16-xx");
 		
 		// THE QUERY FOR
 		
@@ -234,7 +246,7 @@ public class RadixArizonaQueryWithRspTest implements MessageListener {
 	 */
 	public static void main(String[] args1) {
 		String args[] = new String[2];
-		args[0] = "lattice-1.cs.colostate.edu";
+		args[0] = "lattice-220.cs.colostate.edu";
 		args[1] = "5635";
 		
 		if (args.length != 2) {

@@ -32,8 +32,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -88,6 +90,8 @@ import galileo.comm.NonBlockStorageRequest;
 import galileo.comm.QueryEvent;
 import galileo.comm.QueryRequest;
 import galileo.comm.QueryResponse;
+import galileo.comm.QueueRequest;
+import galileo.comm.QueueResponse;
 import galileo.comm.RigUpdateRequest;
 import galileo.comm.StorageEvent;
 import galileo.comm.StorageRequest;
@@ -144,11 +148,6 @@ public class StorageNode implements RequestListener{
 	private String rootDir;
 	private String resultsDir;
 	private int numCores;
-	
-	// THE FOLLOWING 3 ARE NOT USED, BUT a1, a2 are used as placeholders
-	public static String baseHash = "9tbkh4";
-	public static String a1 = "9tbkh4bpbpb";
-	public static String a2 = "9tbkh4pbpbp";
 
 	private File pidFile;
 	private File fsFile;
@@ -266,7 +265,7 @@ public class StorageNode implements RequestListener{
 		for (NodeInfo node : network.getAllNodes()) {
 			String nodeName = node.getHostname();
 			
-			logger.info("RIKI: HOST AND CANONICAL: "+ this.hostname+" "+this.canonicalHostname);
+			//logger.info("RIKI: HOST AND CANONICAL: "+ this.hostname+" "+this.canonicalHostname);
 			//logger.info("RIKI: NODENAME: "+nodeName);
 			if (nodeName.equals(this.hostname) || nodeName.equals(this.canonicalHostname)) {
 				nodeFound = true;
@@ -494,17 +493,55 @@ public class StorageNode implements RequestListener{
 	}
 	
 	private Set<Integer> plotLocks = new HashSet<>();
+	private int currentNode = -1;
+	
+	/*@EventHandler
+	public void handleQueueRequest(QueueRequest request, EventContext context) throws IOException {
+		int nodeNum = request.getNodeNum();
+		
+		if(currentNode == -1) {
+			currentNode = nodeNum;
+			context.sendReply(new QueueResponse(nodeNum,true));
+			logger.info("RIKI: NODE "+nodeNum+" GRANTED QUEUE LOCK");
+		} else if(nodeNum == currentNode) {
+			// NODE NOTIFYING THAT IT IS DONE WRITING
+			currentNode = -1;
+			logger.info("RIKI: NODE "+nodeNum+" RELEASED QUEUE LOCK");
+		} else {
+			context.sendReply(new QueueResponse(nodeNum,false));
+		}
+	}*/
 	
 	@EventHandler
 	public void handleIRODSRequest(IRODSRequest request, EventContext context) throws IOException {
 		switch (request.getType()) {
+			case QUEUE_REQ:
+				int nodeNum = request.getPlotNum();
+				
+				if(currentNode == -1) {
+					currentNode = nodeNum;
+					context.sendReply(new IRODSRequest(TYPE.QUEUE_GRANT, 0));
+					logger.info("RIKI: NODE "+nodeNum+" GRANTED QUEUE LOCK");
+				} else if(nodeNum == currentNode) {
+					// NODE NOTIFYING THAT IT IS DONE WRITING
+					currentNode = -1;
+					logger.info("RIKI: NODE "+nodeNum+" RELEASED QUEUE LOCK");
+				} else {
+					context.sendReply(new IRODSRequest(TYPE.IGNORE, 0));
+				}
+				break;
 			case LOCK_REQUEST:
 				if (!plotLocks.contains(request.getPlotNum())) {
 					plotLocks.add(request.getPlotNum());
 					context.sendReply(new IRODSRequest(TYPE.LOCK_ACQUIRED, request.getPlotNum()));
+					if(request.getPlotNum() == 9971)
+						logger.info("RIKI: PLOT LOCK YES FOR "+request.getPlotNum());
 				}
-				else
+				else {
 					context.sendReply(new IRODSRequest(TYPE.IGNORE, request.getPlotNum()));
+					if(request.getPlotNum() == 9971)
+						logger.info("RIKI: PLOT LOCK NO FOR "+request.getPlotNum());
+				}
 				break;
 			case LOCK_RELEASE_REQUEST:
 				if (plotLocks.contains(request.getPlotNum())) {
@@ -516,8 +553,10 @@ public class StorageNode implements RequestListener{
 				break;
 			case DATA_REQUEST:
 				// Need to search fs for plot data and return it
-				File toGet = new File(request.getFilePath());
+				File toGet = new File(SystemConfig.getRootDir()+request.getFilePath());
 				
+				if(request.getPlotNum() == 9971)
+					logger.info("RIKI: GOT REQUESTED 9971 AT "+toGet.getAbsolutePath());
 				GeospatialFileSystem gfs = (GeospatialFileSystem)fsMap.get(request.getFs());
 				
 				if (toGet.exists()) {
@@ -532,8 +571,21 @@ public class StorageNode implements RequestListener{
 					reply.setSummary(stats);
 					
 					context.sendReply(reply);
-					toGet.delete();
+
+					// REMOVE THE LOCAL CONTENTS ON THIS PLOT
 					
+			    	String toSearch = request.getPlotNum()+File.separator;
+			    	String relPath = request.getFilePath();
+			    	int end = relPath.lastIndexOf(toSearch) + toSearch.length();
+					relPath = relPath.substring(0,end);
+					
+					String folderLoc = SystemConfig.getRootDir()+relPath;
+					
+					File toGetFolder = new File(folderLoc);
+					//toGetFolder.delete();
+					deleteDirectoryRecursion(toGetFolder.toPath());
+					if(request.getPlotNum() == 9971)
+						logger.info("RIKI: REMOVED ILLEGITIMATE: "+folderLoc);
 				}
 				else
 					context.sendReply(new IRODSRequest(TYPE.IGNORE, request.getPlotNum()));
@@ -541,6 +593,17 @@ public class StorageNode implements RequestListener{
 			default:
 				context.sendReply(new IRODSRequest(TYPE.IGNORE, request.getPlotNum()));
 		}
+	}
+	
+	public void deleteDirectoryRecursion(java.nio.file.Path path) throws IOException {
+		if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+			try (DirectoryStream<java.nio.file.Path> entries = Files.newDirectoryStream(path)) {
+				for (java.nio.file.Path entry : entries) {
+					deleteDirectoryRecursion(entry);
+				}
+			}
+		}
+		Files.delete(path);
 	}
 	
 	@EventHandler
@@ -570,7 +633,7 @@ public class StorageNode implements RequestListener{
 	
 	
 	@EventHandler
-	public void handleRIGUpdateRequest(RigUpdateRequest request, EventContext context) throws IOException {
+	public void XhandleRIGUpdateRequest(RigUpdateRequest request, EventContext context) throws IOException {
 		
 		if(!isMonitor) {
 			logger.info("RIKI: NON-MONITOR");
@@ -580,7 +643,7 @@ public class StorageNode implements RequestListener{
 		if (fsName != null) {
 			GeospatialFileSystem gfs = (GeospatialFileSystem) fsMap.get(fsName);
 			if(gfs!=null)
-				gfs.updateFS_RIG();
+				gfs.XupdateFS_RIG();
 		}		
 	}
 
@@ -993,8 +1056,8 @@ public class StorageNode implements RequestListener{
 	
 	
 	// QUERYING THE RIG GRAPH
-	@EventHandler
-	public void handleBlockQueryRequest(BlockQueryRequest event, EventContext context) {
+	/*@EventHandler
+	public void XhandleBlockQueryRequest(BlockQueryRequest event, EventContext context) {
 		
 		long queryId = System.currentTimeMillis();
 		
@@ -1020,7 +1083,7 @@ public class StorageNode implements RequestListener{
 				
 		
 		}
-	}
+	}*/
 	
 	
 	
@@ -1040,7 +1103,7 @@ public class StorageNode implements RequestListener{
 		String queryId = String.valueOf(System.currentTimeMillis());
 		GeospatialFileSystem gfs = (GeospatialFileSystem) this.fsMap.get(request.getFilesystemName());
 		
-		//logger.info("RIKI: RECEIVED A QUERY REQUEST");
+		logger.info("RIKI: RECEIVED A QUERY REQUEST "+gfs);
 		if (gfs != null) {
 			QueryResponse response = new QueryResponse(queryId, gfs.getFeaturesRepresentation(), new JSONObject());
 			Metadata data = new Metadata();
@@ -1197,7 +1260,7 @@ public class StorageNode implements RequestListener{
 		try {
 			//logger.info(event.getFeatureQueryString());
 			//logger.info(event.getMetadataQueryString());
-			//logger.info("RIKI: QUERY SENSOR:"+event.getSensorName());
+			logger.info("RIKI: QUERY SENSOR:"+event.getSensorName());
 			
 			String fsName = event.getFilesystemName();
 			GeospatialFileSystem fs = (GeospatialFileSystem) fsMap.get(fsName);//always roots
@@ -1264,7 +1327,7 @@ public class StorageNode implements RequestListener{
 					totalBlocks += blocks.size();
 					for(String block : blocks){
 						
-						if("roots-arizona".equals(fsName)) {
+						if(fsName!= null && fsName.startsWith("roots-arizona")) {
 							
 							//logger.info("RIKI: DEALING WITH "+block);
 							// ARIZONA PLOT DATA IS ACTUALLY STORED IN THE BLOCKS
@@ -1286,7 +1349,7 @@ public class StorageNode implements RequestListener{
 							filePaths.put(new String(Files.readAllBytes(Paths.get(block))));
 						}
 						
-						if("roots-arizona".equals(fsName)) {
+						if(fsName!= null && fsName.startsWith("roots-arizona")) {
 							String tokens[] = block.split("\\$\\$");
 							hostFileSize += new File(tokens[0]).length();
 							
@@ -1308,7 +1371,7 @@ public class StorageNode implements RequestListener{
 				resultJSON.put("hostPort", this.port);
 				resultJSON.put("processingTime", totalProcessingTime);
 				
-				if("roots-arizona".equals(fsName)) {
+				if(fsName!= null && fsName.startsWith("roots-arizona")) {
 					resultJSON.put("summaries", plotSummaries);
 				}
 				

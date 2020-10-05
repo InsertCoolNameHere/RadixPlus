@@ -147,7 +147,6 @@ public class GeospatialFileSystem extends FileSystem {
 	private String earliestSpace;
 	private Set<String> geohashIndex;
 	
-	
 	public static final String TEMPORAL_YEAR_FEATURE = "x__year__x";
 	public static final String TEMPORAL_MONTH_FEATURE = "x__month__x";
 	public static final String TEMPORAL_DAY_FEATURE = "x__day__x";
@@ -162,7 +161,7 @@ public class GeospatialFileSystem extends FileSystem {
 	private HashGrid globalGrid;
 	private FilesystemConfig configs;
 	
-	private RadixIntegrityGraph rig;
+	//private RadixIntegrityGraph rig;
 
 	public GeospatialFileSystem(StorageNode sn, String storageDirectory, String name, int precision, int nodesPerGroup,
 			int temporalType, NetworkInfo networkInfo, String featureList, SpatialHint sHint, boolean ignoreIfPresent, FilesystemConfig config)
@@ -170,8 +169,7 @@ public class GeospatialFileSystem extends FileSystem {
 			HashTopologyException {
 		super(storageDirectory, name, ignoreIfPresent, "geospatial");
 		
-		//rig = new RadixIntegrityGraph(TEMPORAL_YEAR_FEATURE+":1,"+TEMPORAL_MONTH_FEATURE+":1,"+TEMPORAL_DAY_FEATURE+":1,sensor:9", "/iplant/home/radix_subterra", name);
-		rig = new RadixIntegrityGraph(featureList, "/iplant/home/radix_subterra", name);
+		//rig = new RadixIntegrityGraph(featureList, "/iplant/home/radix_subterra", name);
 		
 		//logger.info("RIKI: REACHED HERE2");
 		this.master = sn;
@@ -217,28 +215,9 @@ public class GeospatialFileSystem extends FileSystem {
 			}
 		}
 		
-		/*String[] geohashes = {"9xjr6b86","9xjr6b87","9xjr6b88","9xjr6b89","9xjr6b07","9xjr6b82","9xjr6b83","9xjr6b96","9xjr6b97","9xjr6b98","9xjr6b99",
-				"9xjr6b15","9xjr6b17","9xjr6b8b","9xjr6b8c","9xjr6b8d","9xjr6b90","9xjr6b91","9xjr6b92","9xjr6b93","9xjr6b94","9xjr6b95","9xjr6b2q",
-				"9xjr6b2r","9xjr6b2s","9xjr6b2t","9xjr6b2u","9xjr6b2v","9xjr6b2w","9xjr6b2x","9xjr6b2y","9xjr6b2z","9xjr6b2b","9xjr6b2c","9xjr6b2d",
-				"9xjr6b2e","9xjr6b2f","9xjr6b2g","9xjr6b2k","9xjr6b2m","9xjr6b3p","9xjr6b3q","9xjr6b3r","9xjr6b3s","9xjr6b3t","9xjr6b3u","9xjr6b3v",
-				"9xjr6b3w","9xjr6b3x","9xjr6b3y","9xjr6b3z","9xjr6b3b","9xjr6b3c","9xjr6b3d","9xjr6b3e","9xjr6b3f","9xjr6b3g","9xjr6b3h","9xjr6b3j",
-				"9xjr6b3k","9xjr6b3m","9xjr6b3n","9xjr6b0m","9xjr6b8u","9xjr6b8v","9xjr6b8w","9xjr6b22","9xjr6b23","9xjr6b0q","9xjr6b8y","9xjr6b0r",
-				"9xjr6b0s","9xjr6b26","9xjr6b0t","9xjr6b27","9xjr6b0u","9xjr6b28","9xjr6b0v","9xjr6b29","9xjr6b0w","9xjr6b0x","9xjr6b9b","9xjr6b0y",
-				"9xjr6b9c","9xjr6b0z","9xjr6b9d","9xjr6b9e","9xjr6b8e","9xjr6b8f","9xjr6b8g","9xjr6b8k","9xjr6b8m","9xjr6b0e","9xjr6b0g","9xjr6b8q",
-				"9xjr6b8s","9xjr6b0k","9xjr6b8t","9xjr6b30","9xjr6b1n","9xjr6b9v","9xjr6b31","9xjr6b9w","9xjr6b32","9xjr6b1p","9xjr6b33","9xjr6b1q",
-				"9xjr6b9y","9xjr6b34","9xjr6b1r","9xjr6b35","9xjr6b1s","9xjr6b36","9xjr6b1t","9xjr6b37","9xjr6b1u","9xjr6b38","9xjr6b1v","9xjr6b39",
-				"9xjr6b1w","9xjr6b1x","9xjr6b1y","9xjr6b1z","9xjr6b9f","9xjr6b9g","9xjr6b9h","9xjr6b9j","9xjr6b9k","9xjr6b9m","9xjr6b1e","9xjr6b9n",
-				"9xjr6b1g","9xjr6b1h","9xjr6b9q","9xjr6b1j","9xjr6b9s","9xjr6b1k","9xjr6b9t","9xjr6b1m","9xjr6b9u"};*/
-		
 		String[] geohashes = configs.getAllGeohashes();
 		
 		
-		// HANDLING FOR COLORADO PLOTS
-		
-		//String[] baseGeohashes = {StorageNode.baseHash};
-		
-		//geohashes = generateGeohashes(geohashes, geohashes[0].length()+1);
-		//logger.info("RIKI: REACHED HERE4");
 		this.partitioner = new SpatialHierarchyPartitioner(sn, this.network, geohashes);
 		this.timeFormat = System.getProperty("galileo.fs.GeospatialFileSystem.timeFormat", DEFAULT_TIME_FORMAT);
 //		int maxPrecision = GeoHash.MAX_PRECISION / 5;
@@ -265,7 +244,7 @@ public class GeospatialFileSystem extends FileSystem {
 					configs.getSe(), configs.getSw());
 			// THIS READS THE PLOTS.JSON FILE AND MARKS THE PLOTS ON THE HASHGRID
 			//globalGrid.initGrid(pathToGridFile+File.separator+gridFiles[0].getName());
-			globalGrid.initGrid(pathToGridFile);
+			globalGrid.initGrid(pathToGridFile, (SpatialHierarchyPartitioner)partitioner);
 		} catch (IOException | HashGridException | BitmapException e) {
 			logger.log(Level.SEVERE, "could not open grid initialization file. Error: " + e);
 		}
@@ -287,9 +266,9 @@ public class GeospatialFileSystem extends FileSystem {
 	 * HANDLES UPDATE OF THE RIG GRAPH FOR A GIVEN FILESYSTEM
 	 * @throws IOException
 	 */
-	public void updateFS_RIG() throws IOException {
+	public void XupdateFS_RIG() throws IOException {
 	
-		IRODSManager subterra = new IRODSManager();
+		/*IRODSManager subterra = new IRODSManager();
 		
 		String[] paths = null;
 		try {
@@ -312,7 +291,7 @@ public class GeospatialFileSystem extends FileSystem {
 			logger.info("RIKI: RIG UPDATE COMPLETE.");
 		} else {
 			logger.info("RIKI: NO PATH DUMP DETECTED...");
-		}
+		}*/
 		
 	}
 	
@@ -695,10 +674,12 @@ public class GeospatialFileSystem extends FileSystem {
 			if(old_summary == null) {
 				
 				filePathToSummaryMap.put(blockPath, summary);
+				//logger.info("RIKI: SUMMARY ADDED "+summary);
 			} else {
 				// Merging summaries
 				SummaryStatistics newSummary = SummaryStatistics.mergeSummary(old_summary, summary);
 				filePathToSummaryMap.put(blockPath, newSummary);
+				//logger.info("RIKI: SUMMARY UPDATED "+newSummary);
 				
 			}
 		}
@@ -943,7 +924,7 @@ public class GeospatialFileSystem extends FileSystem {
 	 * @param metadataQuery
 	 * @return
 	 */
-	public List<String> listRIGPaths(String temporalProperties, List<Coordinates> spatialProperties, Query metadataQuery) {
+	public List<String> XlistRIGPaths(String temporalProperties, List<Coordinates> spatialProperties, Query metadataQuery) {
 		
 		List<String> blocks = new ArrayList<String>();
 		
@@ -1047,7 +1028,7 @@ public class GeospatialFileSystem extends FileSystem {
 			
 		}
 		
-		blocks = rig.evaluateQuery(query);
+		//blocks = rig.evaluateQuery(query);
 		
 		return blocks;
 	}
@@ -1694,7 +1675,7 @@ public class GeospatialFileSystem extends FileSystem {
 		return configs.getLonIndex(fileSensorType);
 	}
 
-	public RadixIntegrityGraph getRig() {
+	/*public RadixIntegrityGraph getRig() {
 		return rig;
 	}
 
@@ -1710,7 +1691,7 @@ public class GeospatialFileSystem extends FileSystem {
 	public void updateRIG() {
 		rig.updatePathsIntoRIG();
 		
-	}
+	}*/
 
 	
 }

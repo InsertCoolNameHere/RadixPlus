@@ -41,7 +41,7 @@ import galileo.serialization.SerializationOutputStream;
 
 public class IRODSRequest implements Event{
 	public enum TYPE{
-		LOCK_REQUEST, IGNORE, LOCK_ACQUIRED, DATA_REQUEST, DATA_REPLY, LOCK_RELEASE_REQUEST, LOCK_RELEASED;
+		LOCK_REQUEST, IGNORE, LOCK_ACQUIRED, DATA_REQUEST, DATA_REPLY, LOCK_RELEASE_REQUEST, LOCK_RELEASED, QUEUE_REQ, QUEUE_GRANT;
 	}
 	
 	private TYPE type;
@@ -145,6 +145,10 @@ public class IRODSRequest implements Event{
 				return 6;
 			case LOCK_RELEASED:
 				return 7;
+			case QUEUE_REQ:
+				return 8;
+			case QUEUE_GRANT:
+				return 9;
 			default:
 				throw new IllegalArgumentException("Invalid type: " + type);
 		}
@@ -165,6 +169,10 @@ public class IRODSRequest implements Event{
 				return TYPE.LOCK_RELEASE_REQUEST;
 			case 7:
 				return TYPE.LOCK_RELEASED;
+			case 8:
+				return TYPE.QUEUE_REQ;
+			case 9:
+				return TYPE.QUEUE_GRANT;
 			default:
 				throw new IllegalArgumentException("Invalid type: " + type);
 		}

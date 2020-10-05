@@ -37,6 +37,7 @@ import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -93,7 +94,18 @@ public class DataIngestor extends Thread{
 	private ServerSocketChannel serverChannel;
 	private Selector selector;
 	public volatile long sumStampTimes = 0, numStamps = 0;
+	
+	// # Of lines of record in each CHUNK
 	public static final int CHUNK_SIZE = 2000;
+	// SIZE OF DATA SPLIT
+	public static final int SPLIT_SIZE = 250;
+	
+	// MAX NUMBER OF CHUNKS THAT CAN BE PROCESSED AT A TIME
+	// WAIT FOR 100 MB PROCESSED & REMOVED, THEN ON TO THE NEXT 100 MB
+	public int totalChunksAllowedMax = 73*4;
+	public int totalChunksAllowedMin = 73*2;
+	
+	public Integer blockObject = 0;
 	
 	private static Logger logger = Logger.getLogger("galileo");
 	public DataIngestor(StorageNode sn) throws IOException{
@@ -206,7 +218,8 @@ public class DataIngestor extends Thread{
 		try {
 			SocketChannel channel = (SocketChannel) key.channel();
 	        ByteBuffer buffer = ByteBuffer.allocate(1024 * 100); //Read 100 KB at a time
-	        buffer.clear(); //clear for safety
+	        //buffer.clear()
+	        ((Buffer)buffer).clear(); //clear for safety
 	        int numRead = -1;
 	        synchronized(channel) {
 		         numRead = channel.read(buffer);
@@ -216,7 +229,8 @@ public class DataIngestor extends Thread{
 		        	 byte[] data = new byte[numRead];
 		        	 System.arraycopy(buffer.array(), 0, data, 0, numRead);
 		        	 filePath += new String(data);
-		        	 buffer.clear(); //important to clear buffer to eliminate leftover data
+		        	 //buffer.clear(); //important to clear buffer to eliminate leftover data
+		        	 ((Buffer)buffer).clear();
 		        	 numRead = channel.read(buffer);
 		         }
 		         channel.close();
@@ -248,111 +262,141 @@ public class DataIngestor extends Thread{
 		return ret;
 		
 	}
-	/**
-	 * This method determines the filepath sent from an external node to read data from. Data is read in 250 MB chunks from disk,
-	 * which are then split into smaller messages to be "stamped" and forwarded to the appropriate node in the Radix cluster.
-	 * @param key the selection key to read*/
+	
+	
+	private void haltIfTooMany(BlockingQueue<String> queue, StringBuilder chunk) {
+		
+		if(queue.size() >=totalChunksAllowedMax) {
+			while(queue.size() >= totalChunksAllowedMin) {
+				
+			}
+		}
+		
+		queue.add(chunk.toString());
+		
+	}
+	
+	// PROVIDE MULTIPLE FILE INPUT TOKENS SEPARATED BY $$
+	
 	private void read(SelectionKey key) throws IOException, HashException, PartitionException {
 		logger.info("RIKI: Beginnning to read ingest file. Time: " + new Date(System.currentTimeMillis()));
 		
-		String filePath = readKey(key);
+		String allFilePaths = readKey(key);
 		
-		String[] tokens = filePath.split(",");
+		String[] allFilePathsArray = allFilePaths.split("\\$\\$");
+		System.out.println("RIKI: ALLFILEPATHS..."+allFilePaths+" "+allFilePathsArray.length);
 		
-		filePath = tokens[0];
-		
-		String fsName = "INVALID_NAME";
-		String fileSensorType = "INVALID_TYPE";
-		
-		if(tokens.length == 3) {
-			fsName = tokens[1];
-			fileSensorType = tokens[2];
-		}
-		
-		logger.info("RIKI: TOKENS:"+tokens.length+" "+fsName+" "+fileSensorType);
-		
-		this.threadPool = new ChunkProcessor[10];
-		for (int i = 0; i < threadPool.length; i++)  
-			threadPool[i] = new ChunkProcessor(this, this.sn, fsName, fileSensorType);
-		
-		// INITIATE CHUNK PROCESSORS
-		// THESE WILL PICK OFF CHUNKS FROM THE QUEUE
-		for (ChunkProcessor cp : threadPool)
-			cp.start();
-		
-		boolean fileRead = false;
-		String lineSep = System.lineSeparator();
-		File f = new File(filePath);
-		
-		long offSet = 250000*1024;//read 250MB at a time
-		long start = 0;
+		int totalProcessors = Runtime.getRuntime().availableProcessors();
 		long linesCounted = 0;
-		long lineCount = 0;
-		long numMsgs = 0;
 		
-		logger.info("RIKI: RECEIVED INPUT FILE...ABOUT TO READ IT: "+filePath);
+		for(String filePathStr: allFilePathsArray) {
 		
-		@SuppressWarnings("resource")// inChannel is closed, which in turn closes RandomAccessFile, safely ignore warning
-		FileChannel  inChannel = new RandomAccessFile(filePath, "r").getChannel();
-		StringBuilder chunk = new StringBuilder();
-		if (f.exists()) 
-			while (!fileRead) {
-						
-				// 250 MB OF FILE IS READ IN AT A TIME
-				// OUT OF THIS, WE FORM CHUNKS OF 400 RECORDS EACH FOR PROCESSING
-				// THESE CHUNKS ARE PROCESSED BY A CHUNK PROCESSOR THREAD
-				try {
-					
-					if (start + offSet > inChannel.size()) {
-						offSet = inChannel.size() - start;
-						fileRead = true;
-					}
-					MappedByteBuffer mmb = inChannel.map(FileChannel.MapMode.READ_ONLY, start, offSet);//inChannel.size()
-					byte[] buffer = new byte[(int)offSet];
-					
-					// PUT 250MB DATA FROM BYTE BUFFER INTO THIS 'buffer' ARRAY
-				    mmb.get(buffer);
-					start += offSet;
-					CustomBufferedReader in = new CustomBufferedReader(new InputStreamReader(new ByteArrayInputStream(buffer)));
-					
-					for (String line = in.readLine(); line != null; line = in.readLine()) {
-						chunk.append(line);
-						if (line.endsWith(lineSep)) {
-							lineCount++;
-							linesCounted++;
-						}
-						if (lineCount == CHUNK_SIZE) {//let's test this shall we?
-							queue.add(chunk.toString());
-							numMsgs++;
-							chunk = new StringBuilder();
-							lineCount = 0;
-						}
-						
-					}
-					
-					if(chunk.length() > 0) {
-						queue.add(chunk.toString());
-					}
-					logger.info("Processed 250 MB of file and added " + numMsgs + " messages to be stamped");
-					numMsgs= 0;
-					in.close();
-				}catch(Exception e) {
-					logger.info("DataIngestor error: " + e);
-				}
+			String[] tokens = filePathStr.split(",");
+			
+			String filePath = tokens[0];
+			
+			String fsName = "INVALID_NAME";
+			String fileSensorType = "INVALID_TYPE";
+			
+			System.out.println(filePathStr+" HAS TOKENS "+tokens.length);
+			if(tokens.length == 3) {
+				fsName = tokens[1];
+				fileSensorType = tokens[2];
 			}
-		else
-			logger.warning("DataIngestor received invalid file path: " + filePath);
-
+			logger.info("RIKI: TOKENS:"+tokens.length+" "+fsName+" "+fileSensorType+" PROCESSORS: "+totalProcessors);
+			
+			// CREATING A NEW THREADPOOL OF CHUNK PROCESSORS
+			this.threadPool = new ChunkProcessor[totalProcessors];
+			for (int i = 0; i < threadPool.length; i++)  
+				threadPool[i] = new ChunkProcessor(this, this.sn, fsName, fileSensorType);
+			
+			// INITIATE CHUNK PROCESSORS
+			// THESE WILL PICK OFF CHUNKS FROM THE QUEUE
+			for (ChunkProcessor cp : threadPool) {
+				cp.start();
+				logger.info("RIKI: THREAD START");
+			}
+			
+			boolean fileRead = false;
+			String lineSep = System.lineSeparator();
+			File f = new File(filePath);
+			
+			long offSet = SPLIT_SIZE*1000*1024;//read 250MB at a time
+			long start = 0;
+			
+			long lineCount = 0;
+			long numMsgs = 0;
+			
+			logger.info("RIKI: ABOUT TO READ INPUT FILE: "+filePath);
+			
+			@SuppressWarnings("resource")// inChannel is closed, which in turn closes RandomAccessFile, safely ignore warning
+			FileChannel  inChannel = new RandomAccessFile(filePath, "r").getChannel();
+			StringBuilder chunk = new StringBuilder();
+			if (f.exists()) 
+				while (!fileRead) {
+							
+					// 250 MB OF FILE IS READ IN AT A TIME
+					// OUT OF THIS, WE FORM CHUNKS OF 400 RECORDS EACH FOR PROCESSING
+					// THESE CHUNKS ARE PROCESSED BY A CHUNK PROCESSOR THREAD
+					try {
+						
+						if (start + offSet > inChannel.size()) {
+							offSet = inChannel.size() - start;
+							fileRead = true;
+						}
+						MappedByteBuffer mmb = inChannel.map(FileChannel.MapMode.READ_ONLY, start, offSet);//inChannel.size()
+						byte[] buffer = new byte[(int)offSet];
+						
+						// PUT 250MB DATA FROM BYTE BUFFER INTO THIS 'buffer' ARRAY
+					    mmb.get(buffer);
+						start += offSet;
+						CustomBufferedReader in = new CustomBufferedReader(new InputStreamReader(new ByteArrayInputStream(buffer)));
+						
+						for (String line = in.readLine(); line != null; line = in.readLine()) {
+							chunk.append(line);
+							if (line.endsWith(lineSep)) {
+								lineCount++;
+								linesCounted++;
+							}
+							if (lineCount == CHUNK_SIZE) {
+								//queue.add(chunk.toString());
+								haltIfTooMany(queue, chunk);
+								numMsgs++;
+								chunk = new StringBuilder();
+								lineCount = 0;
+							}
+							
+						}
+						
+						if(chunk.length() > 0) {
+							//queue.add(chunk.toString());
+							haltIfTooMany(queue, chunk);
+						}
+						logger.info("Processed "+SPLIT_SIZE+" MB of file and added " + numMsgs + " messages to be stamped");
+						numMsgs= 0;
+						in.close();
+						
+					}catch(Exception e) {
+						logger.info("DataIngestor error: " + e);
+					}
+				}
+			else
+				logger.warning("DataIngestor received invalid file path: " + filePath);
 		
-		// UNTIL ALL CHUNKS HAVE BEEN READ OF THE QUEUE, HALT HERE
-		while(queue.size() > 0) {
 
+			inChannel.close();
+			// UNTIL ALL CHUNKS HAVE BEEN READ OF THE QUEUE, HALT HERE
+			while(queue.size() > 0) {
+
+			}
+			logger.info("All messages stamped and sent\n Sent a total of " + linesCounted + " lines.");
+			logger.info("Average compress/stamp/send time: " + (double)sumStampTimes/(double)numStamps);
+			for (ChunkProcessor cp : threadPool)
+				cp.kill();
 		}
-		inChannel.close();
-		logger.info("All messages stamped and sent\n Sent a total of " + linesCounted + " lines.");
-		logger.info("Average compress/stamp/send time: " + (double)sumStampTimes/(double)numStamps);
-		for (ChunkProcessor cp : threadPool)
-			cp.kill();
+		
+		
+		
 	}
 	
 	/**
@@ -378,7 +422,7 @@ public class DataIngestor extends Thread{
 	        private void sendMessage(byte[] message, NodeInfo dest, boolean checkAll, String fsName1, String fileSensorType1) throws IOException {
 	        	NonBlockStorageRequest request = new NonBlockStorageRequest(message, fsName1, fileSensorType1);
 	        	
-	        	logger.info("RIKI: CHUNK PROPS: "+fsName+" "+fileSensorType+" "+dest);
+	        	//logger.info("RIKI: CHUNK PROPS: "+fsName+" "+fileSensorType+" "+dest);
 	        	request.setCheckAll(checkAll);
 	        	messageRouter.sendMessage(dest, EventPublisher.wrapEvent(request));
 	   		 
@@ -393,18 +437,19 @@ public class DataIngestor extends Thread{
 	        	alive = true;
 	        	GeospatialFileSystem fs = (GeospatialFileSystem)this.sn.getFS(fsName);
 	        	
-	        	//logger.info("RIKI: PARAMS: "+ fs.getDataLatIndex(fileSensorType)+ " "+ fs+" "+fileSensorType);
+	        	//logger.info("RIKI: INDEX PARAMS: "+ fs.getDataLatIndex(fileSensorType)+ " "+ fs+" "+fileSensorType);
 	        	Sampler sampler = new Sampler(((SpatialHierarchyPartitioner)((GeospatialFileSystem)this.sn.getFS(fsName)).getPartitioner()),
 	        			fs.getDataLatIndex(fileSensorType), fs.getDataLonIndex(fileSensorType));
 	        	//logger.info("RIKI: GRID INIT SUCCESS...");
 	        	while(alive) {
 					try {
+						
 						String data = null;
 						synchronized(master.queue) {
 							if(master.queue.size() > 0)
 								data = master.queue.take();
 						}
-						
+						//logger.info("RIKI: PROCESSING STARTED");
 						if(data == null)
 							continue;
 						
@@ -419,18 +464,18 @@ public class DataIngestor extends Thread{
 						// HOW MANY RECORDS FALL IN WHICH DESTINATION
 						HashMap<NodeInfo, Integer> dests = response.getNodeMap();
 						
-						//logger.info("RIKI: THE FOLLOWING NODES MIGHT HANDLE CHUNKS: "+dests.keySet());
+						logger.info("RIKI: THE FOLLOWING NODES MIGHT HANDLE CHUNKS: "+dests.keySet());
 						if (dests.keySet().size() == 1) {//all data belongs to one node
 							Map.Entry<NodeInfo,Integer> entry = dests.entrySet().iterator().next();
 							NodeInfo dest = entry.getKey();
-							//no good
+							//logger.info("RIKI: THE FOLLOWING NODES MIGHT HANDLE CHUNKS: "+dest);
 							if (dest != null && dest.toString().split(":")[0].contentEquals(this.sn.getHostName()))//data belongs to this node, no need for network xfer
 								this.sn.handleLocalNonBlockStorageRequest(new NonBlockStorageRequest(compressed, fsName, fileSensorType));
 							else if (dest != null)
 								sendMessage(compressed, dest, response.checkAll(), fsName, fileSensorType);
 							else
 								logger.severe("Identified null as destination");
-							
+						
 							//logger.info("RIKI: THE FOLLOWING NODE(S) IS SELECTED TO HANDLE CHUNKS: "+dests.keySet());
 						}
 						else {
@@ -444,6 +489,8 @@ public class DataIngestor extends Thread{
 									count = dests.get(node);
 								}
 							}//no good
+							
+							//logger.info("RIKI: THE FOLLOWING NODES MIGHT HANDLE CHUNKS: "+finalDest);
 							if (finalDest != null && finalDest.toString().split(":")[0].contentEquals(this.sn.getHostName()))//data belongs to this node, no need for network xfer
 								this.sn.handleLocalNonBlockStorageRequest(new NonBlockStorageRequest(compressed, fsName, fileSensorType));
 							else if (finalDest!=null)

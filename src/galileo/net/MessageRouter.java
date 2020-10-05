@@ -26,6 +26,7 @@ package galileo.net;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.Buffer;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
@@ -242,14 +243,16 @@ public abstract class MessageRouter implements Runnable {
      */
     protected void read(SelectionKey key) {
         SocketChannel channel = (SocketChannel) key.channel();
-        readBuffer.clear();
+        //readBuffer.clear();
+        ((Buffer)readBuffer).clear();
 
         int bytesRead = 0;
 
         try {
             /* Read data from the channel */
             while ((bytesRead = channel.read(readBuffer)) > 0) {
-                readBuffer.flip();
+                //readBuffer.flip();
+            	((Buffer)readBuffer).flip();
                 processIncomingMessage(key);
             }
         } catch (IOException e) {
@@ -371,7 +374,8 @@ public abstract class MessageRouter implements Runnable {
         ByteBuffer buffer = ByteBuffer.allocate(messageSize + 4);
         buffer.putInt(messageSize);
         buffer.put(message.getPayload());
-        buffer.flip();
+        //buffer.flip()
+        ((Buffer)buffer).flip();
         return buffer;
     }
 

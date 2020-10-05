@@ -245,6 +245,7 @@ public class SummaryStatistics implements ByteSerializable{
 		
 		JSONObject summary = new JSONObject();
 		
+		//logger.info("RIKI: WO SUMMARY: "+toString());
 		summary.put("count", count);
 		summary.put("max",max);
 		summary.put("min",min);

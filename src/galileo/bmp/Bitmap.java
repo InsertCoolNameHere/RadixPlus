@@ -26,11 +26,13 @@ software, even if advised of the possibility of such damage.
 
 package galileo.bmp;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.Iterator;
 
 import com.googlecode.javaewah.EWAHCompressedBitmap;
+
 
 /**
  * A thin wrapper around {@link com.googlecode.javaewah.EWAHCompressedBitmap}
@@ -90,6 +92,7 @@ public class Bitmap implements Iterable<Integer> {
 			e.printStackTrace();
 		}
     }
+    
     /**
      * Given an array of raw bytes, convert the bytes into a compressed bitmap
      * representation with 2D characteristics.  This method provides

@@ -140,6 +140,23 @@ public class SpatialHierarchyPartitioner extends Partitioner<Metadata> {
 		}
 		return info;
 	}
+	
+	// RIKI: USED DURING SYNC OF PLOT DATA
+	public List<NodeInfo> getNodesForGeohashSet(Set<String> hashes) throws HashException {
+		
+		Set<NodeInfo> nodes = new HashSet<NodeInfo>();
+		for (String hash1 : hashes) {
+			
+			String hash = hash1.substring(0,8);
+			
+			NodeInfo n = locateHashVal(hash);
+			
+			if(n != null)
+				nodes.add(n);
+			
+		}
+		return new ArrayList<NodeInfo>(nodes);
+	}
 
 	@Override
 	public List<NodeInfo> findDestinations(Metadata data) throws HashException, PartitionException {

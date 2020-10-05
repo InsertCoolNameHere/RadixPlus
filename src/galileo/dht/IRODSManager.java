@@ -24,7 +24,7 @@ software, even if advised of the possibility of such damage.
 */
 
 /**
- * @author Max Roselius: mroseliu@rams.colostate.edu
+ * @author Saptashwa Mitra: sapmitra@colostate.edu
  * This class handles all interaction with IRODS. Mostly just inserting data there. As is this code doesn't hammer
  * IRODS services too hard, but if emails are received at radix_subterra@gmail.com complaining of issues, change ""data.iplantcollaborative.org" 
  * to "davos.cyverse.org" below.*/
@@ -41,12 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
 import java.util.zip.GZIPOutputStream;
 
@@ -62,16 +57,15 @@ import org.irods.jargon.core.exception.JargonFileOrCollAlreadyExistsException;
 import org.irods.jargon.core.exception.OverwriteException;
 import org.irods.jargon.core.exception.UnixFileCreateException;
 import org.irods.jargon.core.packinstr.TransferOptions;
+import org.irods.jargon.core.pub.BulkFileOperationsAO;
 import org.irods.jargon.core.pub.DataTransferOperations;
 import org.irods.jargon.core.pub.IRODSFileSystem;
 import org.irods.jargon.core.pub.io.IRODSFile;
 import org.irods.jargon.core.pub.io.IRODSFileFactory;
-import org.irods.jargon.core.transfer.TransferStatus;
-import org.irods.jargon.core.transfer.TransferStatusCallbackListener;
-import org.irods.jargon.core.transfer.TransferStatusCallbackListener.CallbackResponse;
-import org.irods.jargon.core.transfer.TransferStatusCallbackListener.FileStatusCallbackResponse;
 import org.irods.jargon.core.transfer.DefaultTransferControlBlock;
 import org.irods.jargon.core.transfer.TransferControlBlock;
+import org.irods.jargon.core.transfer.TransferStatus;
+import org.irods.jargon.core.transfer.TransferStatusCallbackListener;
 
 import galileo.config.SystemConfig;
 import galileo.dht.DataStoreHandler.MessageHandler;
@@ -91,13 +85,13 @@ public class IRODSManager {
 	
 	
 	public IRODSManager() {	//davos.cyverse.org
-		account = new IRODSAccount("data.iplantcollaborative.org", 1247, "radix_subterra", "roots&radix2018", "/iplant/home/radix_subterra", "iplant", "");
+		account = new IRODSAccount("data.iplantcollaborative.org", 1247, System.getenv("IRODS_USER"), System.getenv("IRODS_PASSWORD"), "/iplant/home/radix_subterra", "iplant", "");
 		try {
 			filesystem = IRODSFileSystem.instance();
 			fileFactory = filesystem.getIRODSFileFactory(account);
 			dataTransferOperationsAO = filesystem.getIRODSAccessObjectFactory()
 					.getDataTransferOperations(account);
-
+			
 		} catch (JargonException e) {
 			logger.severe("Error initializing IRODS FileSystem: " + e);
 		}	 
@@ -171,17 +165,19 @@ public class IRODSManager {
 	public void writeRemoteFileAtSpecificPath(File toExport, String remoteDirectory)throws JargonException{
 		
 		TransferOptions opts = new TransferOptions();
-		opts.setComputeAndVerifyChecksumAfterTransfer(true);
+		
+		//opts.setComputeAndVerifyChecksumAfterTransfer(true);
 		opts.setIntraFileStatusCallbacks(true);
+		//opts.setUseParallelTransfer(false);
 		TransferControlBlock tcb = DefaultTransferControlBlock.instance();
 		tcb.setTransferOptions(opts);
-		tcb.setMaximumErrorsBeforeCanceling(10);
+		tcb.setMaximumErrorsBeforeCanceling(2);
 		tcb.setTotalBytesToTransfer(toExport.length());
 		
-		logger.info("RIKI: RFFILE: "+remoteDirectory);
+		//logger.info("RIKI: RFILE: "+remoteDirectory);
 		remoteDirectory = remoteDirectory.substring(0, remoteDirectory.lastIndexOf("/"));
 		
-		logger.info("RIKI: RemoteDirectory FOR RIG DUMP: " + remoteDirectory);
+		logger.info("RIKI: RemoteDirectory FOR RIG DUMP/ TAR: " + remoteDirectory);
 		IRODSFile remoteDir = null;
 		try {
 			
@@ -193,12 +189,12 @@ public class IRODSManager {
 			
 			}
 			
-			logger.info("Created remoteDirX: " + remoteDir.getAbsolutePath());
+			//logger.info("Created remoteDirX: " + remoteDir.getAbsolutePath() +" FOR "+toExport.getName());
 			while(true) {
 				try {
 					
 					dataTransferOperationsAO.putOperation(toExport, remoteDir, null, tcb);
-					logger.info("RIKI: DUMPED "+toExport.getName() +" THE RIG AT: "+remoteDir.getAbsolutePath()+" "+remoteDirectory);
+					logger.info("RIKI: DUMPED "+toExport.getName() +" AT: "+remoteDir.getAbsolutePath()+" "+remoteDirectory);
 					break;
 				} catch(UnixFileCreateException e) {
 					logger.info("UnixFileCreateException caught, trying again.");
@@ -218,9 +214,10 @@ public class IRODSManager {
 					//break;
 				} catch (OverwriteException | JargonFileOrCollAlreadyExistsException | DuplicateDataException e){//append to existing file
 					logger.severe("CAUGHT OVERWRITE EXCEPTION!");
+					break;
 					
 				} catch (Exception e) {
-					logger.severe("RIKI: Problem IRODS: " + e + ": " + toExport.getAbsolutePath());
+					logger.severe("RIKI: Problem IRODS: " + e.getMessage() + ": " + toExport.getAbsolutePath());
 				} 
 			}
 		} catch (JargonException e) {
@@ -288,8 +285,14 @@ public class IRODSManager {
 						e1.printStackTrace();
 					}
 				} catch (OverwriteException | JargonFileOrCollAlreadyExistsException | DuplicateDataException e){//append to existing file
-					logger.severe("RIKI: CAUGHT OVERWRITE EXCEPTION FOR "+remoteDir);
-					break;
+					logger.severe("RIKI: CAUGHT OVERWRITE FOR "+remoteDir+"...TRYING AGAIN");
+					try {
+						Thread.sleep(ThreadLocalRandom.current().nextInt(0, 50));
+					} catch (InterruptedException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}
+					//break;
 					
 				}
 			}
@@ -576,28 +579,22 @@ public class IRODSManager {
 		
 	}
 	
-	/**
-	 * CREATES A TAR FILE OUT OF THE CONTENTS
-	 * @author sapmitra
-	 * @param toExport
-	 * @param remoteDirectory
-	 * @throws JargonException
-	 */
-	public void tarOnGalileoAndUntarOnIrods(File toExport, String remoteDirectory) throws JargonException {
+	
+	public static void main(String arg[]) {
 		
-		writeRemoteFileAtSpecificPath(toExport, remoteDirectory);
-		
+		createTarFile("/s/chopin/b/grad/sapmitra/Desktop/tars/roots-arizona", "/s/chopin/b/grad/sapmitra/Desktop/tars/", "mytar.tar");
 	}
 	
 	/**
-	 * COMPRESS THE CONTENTS OF THE sourceDir folder into the destinationDir LOCATIONS
+	 * 
 	 * @author sapmitra
-	 * @param sourceDir THE DIRECTOORY YOU WANT COMPRESSED
-	 * @param destinationDir THE DESTINATION FOLDER WHERE YOU WANT THE roots-arizona.tar.gz STORED
+	 * @param sourceDir THE SOURCE DIRECTORY - eg. roots-arizona
+	 * @param destinationDir - WHERE YOU WANT roots-arizona.tar unzipped...USUALLY THE FS_ROOT DIRECTORY
+	 * @param tarFileName
 	 */
-	private void createTarFile(String sourceDir, String destinationDir, String fsName) {
+	public static void createTarFile(String sourceDir, String destinationDir, String tarFileName) {
 		
-		String destFilePath = destinationDir+GALILEO_SEPARATOR+fsName+".tar.gz";
+		String destFilePath = destinationDir+GALILEO_SEPARATOR+tarFileName;
 		
 		Path path = Paths.get(destFilePath);
 		
@@ -622,12 +619,13 @@ public class IRODSManager {
 		
 		
 		TarArchiveOutputStream tarOs = null;
-		
+		FileOutputStream fos = null;
+		//GZIPOutputStream gos = null;
 		try {
 			
-			FileOutputStream fos = new FileOutputStream(destFilePath);
-			GZIPOutputStream gos = new GZIPOutputStream(new BufferedOutputStream(fos));
-			tarOs = new TarArchiveOutputStream(gos);
+			fos = new FileOutputStream(destFilePath);
+			//gos = new GZIPOutputStream(new BufferedOutputStream(fos));
+			tarOs = new TarArchiveOutputStream(fos);
 			addFilesToTarGZ(sourceDir, "", tarOs);
 			
 		} catch (IOException e) {
@@ -636,6 +634,9 @@ public class IRODSManager {
 		} finally {
 			try {
 				tarOs.close();
+				//gos.close();
+				fos.close();
+				
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -645,19 +646,30 @@ public class IRODSManager {
 	
 	
 	
-	public void addFilesToTarGZ(String filePath, String parent, TarArchiveOutputStream tarArchive) throws IOException {
+	public static void addFilesToTarGZ(String filePath, String parent, TarArchiveOutputStream tarArchive) throws IOException {
 		File file = new File(filePath);
 		// Create entry name relative to parent file path
 		String entryName = parent + file.getName();
 		// add tar ArchiveEntry
+		
+		if(file.isFile() && file.getName().contains("metadata"))
+			return;
 		tarArchive.putArchiveEntry(new TarArchiveEntry(file, entryName));
 		if (file.isFile()) {
+			/*if(file.getName().contains("metadata")) {
+				return;
+			}*/
 			FileInputStream fis = new FileInputStream(file);
 			BufferedInputStream bis = new BufferedInputStream(fis);
 			// Write file content to archive
+			/*if(!file.getName().contains("metadata")) {
+				return;
+			}*/
 			IOUtils.copy(bis, tarArchive);
 			tarArchive.closeArchiveEntry();
 			bis.close();
+			fis.close();
+			
 		} else if (file.isDirectory()) {
 			// no need to copy any content since it is
 			// a directory, just close the outputstream
@@ -670,15 +682,34 @@ public class IRODSManager {
 		}
 	}
 	
-	public static void main(String arg[]) throws JargonException, IOException {
+	/**
+	 * USAGE: im.untarIRODSFile("/iplant/home/radix_subterra/riki/roots-arizona.tar","/iplant/home/radix_subterra/riki","");
+	 * @author sapmitra
+	 * @param src
+	 * @param dest
+	 * @param resource
+	 */
+	public void untarIRODSFile(String src, String dest, String resource) {
 		
-		IRODSManager im = new IRODSManager();
-		//File f = new File("/s/chopin/b/grad/sapmitra/Documents/radix/ABC.csv");
-		//im.initRIGPath("roots-arizona");
-		
-		im.createTarFile("/s/chopin/b/grad/sapmitra/Desktop/tempOutput", "/tmp/sapmitra", "roots-arizona");
+		try {
+			BulkFileOperationsAO bo = filesystem.getIRODSAccessObjectFactory().getBulkFileOperationsAO(account);
+			bo.extractABundleIntoAnIrodsCollection(src, dest, resource);
+			
+			IRODSFile toFetch = fileFactory.instanceIRODSFile(src);
+			toFetch.delete();
+			
+			bo.closeSessionAndEatExceptions();
+			toFetch.close();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		
 	}
+	
+	
+	
+	
 	
 	
 }

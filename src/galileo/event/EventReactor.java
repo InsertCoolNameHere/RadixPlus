@@ -80,7 +80,7 @@ public class EventReactor implements MessageListener {
         this.handlerObject = handlerObject;
         this.eventWrapper = new BasicEventWrapper(eventMap);
         linkEventHandlers();
-        messageQueue = new LinkedBlockingQueue<>(DEFAULT_QUEUE_SZ);
+        messageQueue = new LinkedBlockingQueue<>();
     }
 
     /**
@@ -95,7 +95,7 @@ public class EventReactor implements MessageListener {
         this.handlerObject = handlerObject;
         this.eventWrapper = wrapper;
         linkEventHandlers();
-        messageQueue = new LinkedBlockingQueue<>(DEFAULT_QUEUE_SZ);
+        messageQueue = new LinkedBlockingQueue<>();
     }
 
     /**

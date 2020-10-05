@@ -24,7 +24,12 @@ software, even if advised of the possibility of such damage.
 */
 package web;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Random;
 import java.util.logging.Logger;
 
@@ -44,8 +49,8 @@ public class Sampler {
 	private Random rand = new Random();
 	static Logger logger = Logger.getLogger("galileo");
 	
-	private int latIndex = 11;
-	private int lonIndex = 12;
+	public int latIndex = 11;
+	public int lonIndex = 12;
 	
 	public Sampler(SpatialHierarchyPartitioner partitioner){
 		this.partitioner = partitioner;
@@ -59,10 +64,15 @@ public class Sampler {
 		rand.setSeed(System.currentTimeMillis());
 	}
 	
-	public static void main(String arg[]) {
-		String paths= "/iplant/home/radix_subterra/roots-arizona/20419/2018/9/28/irt/20419-2018-9-28-irt.gblock$$3522680225";
-		String[] tokens = paths.split("/");
-		System.out.println(tokens[tokens.length-2]);
+	public static void main(String arg[]) throws IOException, HashGridException {
+		Sampler sam = new Sampler(null);
+		sam.latIndex = 2;
+		sam.lonIndex = 3;
+		HashGrid queryGrid = new HashGrid("9tbkh4,,,",11,"9tbkh49ybpb","9tbkh4dqzzz","9tbkh46mpbp","9tbkh43v000");
+		
+		String ip = new String(Files.readAllBytes(Paths.get("/s/chopin/e/proj/sustain/sapmitra/arizona/cleanData/Roots_2018/irt_small.csv")));
+        
+		sam.sample(queryGrid, ip);
 	}
 	
 	/**
@@ -73,6 +83,12 @@ public class Sampler {
 	 * @throws HashGridException */
 	public SamplerResponse sample(HashGrid grid, String toSample) throws HashGridException {
 		String [] lines = toSample.split("\\r?\\n");
+		
+		int sampSize = 100;
+		if(lines.length/4 < sampSize)
+			sampSize = lines.length/4 ;
+		List<Integer> lineNums = getLineNums(sampSize, lines.length);
+		
 		HashMap<NodeInfo, Integer> dests = new HashMap<>();
 		/*There surely must be a better way to initialize a query grid?*/
 		//HashGrid queryGrid = new HashGrid("wdw0x9", grid.getPrecision(), "wdw0x9bpbpb", "wdw0x9pbpbp");
@@ -80,18 +96,19 @@ public class Sampler {
 		HashGrid queryGrid = new HashGrid(grid.getZonesString(), grid.getPrecision(), grid.upperLeftHash, grid.upperRightHash,
 				grid.bottomRightHash, grid.bottomLeftHash);
 		
-		//logger.info("RIKI: SAMPLER PARAMETERS: "+grid.getZonesString()+" "+ grid.getPrecision()+" "+ grid.upperLeftHash+" "+ grid.upperRightHash+" "+
-				//grid.bottomRightHash+" "+ grid.bottomLeftHash);
+		/*logger.info("RIKI: SAMPLER PARAMETERS: "+grid.getZonesString()+" "+ grid.getPrecision()+" "+ grid.upperLeftHash+" "+ grid.upperRightHash+" "+
+				grid.bottomRightHash+" "+ grid.bottomLeftHash);*/
 		
-		
+		int ln = 0;
 		for (String line : lines){
 			String[] tokens = line.split(",");
-			if(tokens.length > lonIndex) {
+			if(tokens.length > lonIndex && lineNums.contains(ln)) {
 				double lat = Double.parseDouble(line.split(",")[latIndex]);
 				double lon = Double.parseDouble(line.split(",")[lonIndex]); //hard code index #1 and #2 to be lat and long. WILL CHANGE
 				//logger.info("RIKI:PT:"+lat+","+lon);
 				queryGrid.addPoint(new Coordinates(lat, lon));
 			}
+			ln++;
 		}
 	
 		/*Ensure that all points were added*/
@@ -104,9 +121,8 @@ public class Sampler {
 		} else {
 			float p = (float)intersections.length/(float)lines.length;
 			
-			/*
-			 * if(p < 0.01) logger.info("RIKI: SOME INTERSECTIONS FOUND "+(p*100)+"%");
-			 */
+			//logger.info("RIKI: SOME INTERSECTIONS FOUND "+(p*100)+"%");
+			
 		}
 
 		/*For each index, use the partitioner to determine where it goes*/
@@ -163,13 +179,13 @@ public class Sampler {
 		return finalDest;
 	}
 
-//	private List<Integer> getLineNums(int numSamples, int maxLine){
-//		List<Integer> lineNums = new ArrayList<>(numSamples);
-//		while (lineNums.size() < numSamples) {
-//			int toAdd = rand.nextInt(maxLine);
-//			if (!lineNums.contains(toAdd))
-//				lineNums.add(toAdd);
-//		}
-//		return lineNums;
-//	}
+	private List<Integer> getLineNums(int numSamples, int maxLine){
+		List<Integer> lineNums = new ArrayList<>(numSamples);
+		while (lineNums.size() < numSamples) {
+			int toAdd = rand.nextInt(maxLine);
+			if (!lineNums.contains(toAdd))
+				lineNums.add(toAdd);
+		}
+		return lineNums;
+	}
 }

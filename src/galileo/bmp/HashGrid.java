@@ -63,10 +63,20 @@ import javax.imageio.ImageIO;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import galileo.config.SystemConfig;
 import galileo.dataset.Coordinates;
+import galileo.dataset.Metadata;
 import galileo.dataset.Point;
 import galileo.dataset.Point2D;
 import galileo.dataset.SpatialRange;
+import galileo.dht.NetworkConfig;
+import galileo.dht.NetworkInfo;
+import galileo.dht.NodeInfo;
+import galileo.dht.PartitionException;
+import galileo.dht.Partitioner;
+import galileo.dht.SpatialHierarchyPartitioner;
+import galileo.dht.hash.HashException;
+import galileo.dht.hash.HashTopologyException;
 import galileo.util.GeoHash;
 import galileo.util.Pair;
 import geo.main.java.com.github.davidmoten.geo.GeoHashUtils;
@@ -107,6 +117,9 @@ public class HashGrid{
 	
 	// HIGHLAT,LOWLAT,HIGHLON,LOWLON
 	private double[] spatialBounds = new double[4];
+	
+	// KEEPING TRACK OF WHETHER A PLOT LIES OVER MULTIPLE NODES
+	private Map<Integer, List<NodeInfo>> plotToNodesMap = new HashMap<Integer, List<NodeInfo>>();
 	
 	private int basePrecision = 0;
 	
@@ -240,7 +253,52 @@ public class HashGrid{
 	}
 	
 	
-	public void initGrid(String filepath) throws HashGridException, IOException, BitmapException{
+	public List<NodeInfo> getRelevantNodes(int plotID) {
+		return plotToNodesMap.get(plotID);
+	}
+	
+	
+	
+	public void readGrid(String filepath) throws IOException {
+			
+		logger.info("READING GRIDFILE FROM "+filepath);
+		//Initialize the grid based on given file (logic in BitmapTester)
+		String plots = new String(Files.readAllBytes(Paths.get(filepath)));
+		JSONObject plotJson = new JSONObject(plots);
+		JSONArray geometries = (JSONArray)plotJson.get("features");
+		
+		int cnt = 0;
+		
+		for (Object o : geometries){
+			/*
+			 * cnt++; if(cnt%10 == 0) System.out.println(cnt);
+			 */
+			Path2D poly = new Path2D.Double();
+			
+			
+			//coords = all coordinates belonging to current object in iteration, length=1
+			// BOUNDS OF THE PLOT
+			JSONArray coords = ((JSONArray)((JSONObject)((JSONObject)o).get("geometry")).get("coordinates"));
+			JSONArray firstCoord = (JSONArray)((JSONArray)coords.get(0)).get(0);
+			
+			
+			poly.moveTo(firstCoord.getDouble(0), firstCoord.getDouble(1));
+			
+			JSONObject properties = (JSONObject)(((JSONObject)o).get("properties"));
+			int plotID = 0;
+			
+			if(properties.has("plotID")) {
+				plotID = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("plotID");
+			} else {
+				plotID = ((JSONObject)(((JSONObject)o).get("properties"))).getInt("ID_Plot");
+			}
+			
+			if(plotID == 9748)
+				System.out.println("Helo");
+		}
+	}
+	
+	public void initGrid(String filepath, SpatialHierarchyPartitioner partitioner) throws HashGridException, IOException, BitmapException{
 		
 		logger.info("READING GRIDFILE FROM "+filepath);
 		//Initialize the grid based on given file (logic in BitmapTester)
@@ -255,9 +313,14 @@ public class HashGrid{
 			 * cnt++; if(cnt%10 == 0) System.out.println(cnt);
 			 */
 			Path2D poly = new Path2D.Double();
+			
+			
 			//coords = all coordinates belonging to current object in iteration, length=1
+			// BOUNDS OF THE PLOT
 			JSONArray coords = ((JSONArray)((JSONObject)((JSONObject)o).get("geometry")).get("coordinates"));
 			JSONArray firstCoord = (JSONArray)((JSONArray)coords.get(0)).get(0);
+			
+			
 			poly.moveTo(firstCoord.getDouble(0), firstCoord.getDouble(1));
 			
 			JSONObject properties = (JSONObject)(((JSONObject)o).get("properties"));
@@ -276,7 +339,7 @@ public class HashGrid{
 				genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
 			} else {
 				genotype = "GENO"+ThreadLocalRandom.current().nextInt(5);
-				logger.info("RIKI: NO GENOTYPE FOUND FOR: " + plotID);
+				//logger.info("RIKI: NO GENOTYPE FOUND FOR: " + plotID);
 			}
 			//String genotype = ((JSONObject)(((JSONObject)o).get("properties"))).getString("Genotype");
 			
@@ -299,19 +362,38 @@ public class HashGrid{
 				continue;
 			}
 			ArrayList<Coordinates> polyPoints = new ArrayList<>();
-			polyPoints.add(new Coordinates((double)firstCoord.get(1), (double)firstCoord.get(0)));
+			polyPoints.add(new Coordinates((double)firstCoord.get(0), (double)firstCoord.get(1)));
 			for (int i = 1; i < ((JSONArray)coords.get(0)).length(); i++){
 				double lat = ((JSONArray)((JSONArray)coords.get(0)).get(i)).getDouble(0);
 				double lon = ((JSONArray)((JSONArray)coords.get(0)).get(i)).getDouble(1);
+				// THE COORDINATES CONSTRUCTOR INTERNALLY FLIPS LAT AND LON
 				polyPoints.add(new Coordinates(lat, lon));
 				poly.lineTo(lat, lon);
 			}
 			poly.closePath();
+			
+			// FLIPS LON,LAT TO ACTUAL LAT,LON
 			double[][] coordArr = listToArr(polyPoints);
 			
+			//logger.info("RIKI: CARR:"+ coordArr[0][0]+" "+coordArr[0][1]);
 			// GIVEN A POLYGON, FIND 11 CHAR GEOHASHES THAT LIE INSIDE IT
 			// THE COORDINATE ARRAY COULD BE IN ANY CIRCULAR ORDER
 			Set<String> coverage = GeoHashUtils.geoHashesForPolygon(precision, coordArr);
+			Set<String> partition_coverage = GeoHashUtils.geoHashesForPolygon(8, coordArr);
+			
+			try {
+				List<NodeInfo> nodes = partitioner.getNodesForGeohashSet(partition_coverage);
+				
+				if(nodes.size() > 1 && plotID==9971) {
+					logger.info("RIKI: PLOT: "+plotID+">>"+polyPoints+" SPANS "+nodes);
+				} else if(nodes.size() == 0) {
+					logger.info("RIKI: PLOT: "+plotID+" SPANS NOTHING "+nodes+" "+partition_coverage);
+				}
+				plotToNodesMap.put((int)plotID, nodes);
+			} catch (HashException e) {
+				// TODO Auto-generated catch block
+				logger.severe(e.getMessage());
+			}
 
 			// FOR ALL GEOHASHES CONTAINED IN THE PLOT POLYGON
 			for (String ghash : coverage) {
@@ -325,6 +407,8 @@ public class HashGrid{
 				hashRect.lineTo(hashBox[3], hashBox[0]);
 				hashRect.lineTo(hashBox[2], hashBox[0]);
 				hashRect.closePath();
+				
+				// ADDING A PLOT TO THE GRID
 				if ((int)plotID > 0)//hard-coded value that will need to change...
 					this.addPoint(ghash, (int)plotID, poly);
 				/*if (poly.intersects(hashRect.getBounds2D())) {
@@ -362,7 +446,7 @@ public class HashGrid{
 	public int locatePoint(Coordinates coords) throws BitmapException {
 		
 		if(!validatePoint(coords)) {
-			logger.info("RIKI: THE POINT LIES OUTSIDE THE GRID BOUNDS");
+			logger.info("RIKI: THE POINT LIES OUTSIDE THE GRID BOUNDS "+coords);
 			return -1;
 		}
 		
@@ -530,7 +614,7 @@ public class HashGrid{
 			
 		}
 		if (elevenCharKey < 0) {
-			logger.warning("This point falls outside the purview of this bitmap");
+			//logger.warning("This point falls outside the purview of this bitmap");
 			return false;
 		}
 		if (this.bmp.set(elevenCharKey) == false) {
@@ -569,8 +653,9 @@ public class HashGrid{
 
 	public boolean addPoint(String geohash) throws BitmapException {
 		int index = geohashToIndex(geohash);
+		//logger.info("RIKI: INDEX:"+index);
 		if (index < 0) {
-			logger.warning("This point falls outside the purview of this bitmap");
+			//logger.warning("This point falls outside the purview of this bitmap");
 			return false;
 		}
 		if (this.bmp.set(index) == false) {
@@ -899,11 +984,18 @@ public class HashGrid{
 		return height;
 	}
 	
-	public static void main(String arg[]) {
+	public static void main(String arg[]) throws IOException, PartitionException, HashException, HashTopologyException, HashGridException, BitmapException {
 		
-		String s = "9,,,,";
-		String[] tokens = s.split(",");
-		System.out.println();
+		System.out.println(GeoHash.encode(33.06451265090539, -111.96547665406868, 8));
+		String [] geohashes = {"9tbkh5md","9tbkh5m0","9tbkh5m1","9tbkh5m2","9tbkh5m3","9tbkh5m8","9tbkh5m9","9tbkh5m4","9tbkh5m6","9tbkh5je","9tbkh5jh","9tbkh5jd","9tbkh5jm","9tbkh5jn","9tbkh5jp","9tbkh5jj","9tbkh5jk","9tbkh5j5","9tbkh5j6","9tbkh5jw","9tbkh5j7","9tbkh5jx","9tbkh5jq","9tbkh5jr","9tbkh5js","9tbkh5jt","9tbkh5j4"};
+		NetworkInfo network = NetworkConfig.readNetworkDescription("/s/chopin/b/grad/sapmitra/workspace/radix/galileo/config/network/");
+		SpatialHierarchyPartitioner partitioner = new SpatialHierarchyPartitioner(null, network, geohashes);
+		HashGrid hg = new HashGrid("9tbkh5,,,", 11, "9tbkh5bpbpb", "9tbkh5zzzzz", "9tbkh5pbpbp", "9tbkh500000");
+		hg.initGrid("/s/chopin/b/grad/sapmitra/Documents/arizona/cleanData/Roots_2019/plots_arizona_2019.json", partitioner);
+		
+		//[[[-111.965465845,33.064525560694435],[-111.96548216451455,33.06452556069337],[-111.96548199551043,33.06450317269346],[-111.965465676,33.06450317269453],[-111.965465845,33.064525560694435]]]
+		//System.out.println(hg.locatePoint(new Coordinates(33.06451, -111.96547)));
+				
 	}
 	public static void main1(String arg[]) throws BitmapException {
 		

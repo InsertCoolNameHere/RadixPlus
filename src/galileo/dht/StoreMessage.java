@@ -45,6 +45,7 @@ public class StoreMessage implements Comparable <StoreMessage>{
 	private boolean checkAll = true;
 	private String filePath;
 	private String sensorType = "vanilla";
+	public boolean locked = true;
 	
 	public StoreMessage(Type type, byte[] data, GeospatialFileSystem fs, String fsName) throws IOException {
 		this.data = new String(Snappy.uncompress(data));

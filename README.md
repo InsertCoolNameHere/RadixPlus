@@ -1,15 +1,15 @@
-# SILO
+# RADIX+
 
-SILO is a framework designed for the ROOTS-Subterra project that handles the efficient and high-throughput pre-processing, ingestion, storage, retrieval and analytics over large-scale heterogeneous sensor data in a distributed manner. For more details about the project, click [here].
+RADIX+ is a framework designed for the ROOTS-Subterra project that handles the efficient and high-throughput pre-processing, ingestion, storage, retrieval and analytics over large-scale heterogeneous sensor data in a distributed manner. For more details about the project, click [here].
 
-The SILO framework consists of the following components:
+The RADIX+ framework consists of the following components:
 1)	A Front-end Visualization Framework [Link]
 2)	Back-end Distributed Storage System for Pre-processing, Storage & Retrieval
 3)	Command-based Customizable Data Retrieval for the user with Integrity Check [Link]
 
 ## Introduction
 
-This repository contains the source code and deployment instructions for the SILO DHT, which is the 2nd component in the list, which is built on top of the RADIX distributed storage system detailed [here](https://ieeexplore.ieee.org/abstract/document/8672229). 
+This repository contains the source code and deployment instructions for the RADIX+ DHT, which is the 2nd component in the list, which is built on top of the RADIX distributed storage system detailed [here](https://ieeexplore.ieee.org/abstract/document/8672229). 
 
 The system is built in the form of a zero-hop DHT built over a cluster nodes, where any of the nodes in the cluster can handle data pre-processing, ingestion, geo-referencing, and the redirection of the data records to their relevant nodes. On top of that, the system also handles metadata extraction for fast visual analytics as well as periodic backup of the stored data to a highly available storage for scientific data (Cyverse IRODS).
 
@@ -33,7 +33,7 @@ The following are the config files that need to be updated in accordance to your
 | --------- |:-------------:| -----------:|
 |hostnames & 0.group | These two files should be identical and should contain the names of the the hostmachines in the cluster in the format <hostname>:<port>, where <port> can be any available port.	| /galileo/config/network
 |prepareFS_az.java |	This file can be used to pass specialized configuration parameters for individual filesystem being housed in the distributed storage. You may need to update this java file and run it with your own filesystem configuration to properly create your filesystem. | /src/dev
-|plots_arizona.json | This contains the shapefile for the plots from which sensor data is collected. This shapefile is internally used by SILO to geo-reference ingested sensor data to their corresponding plots. The path to your plots shapefile is to be provided as an argument as shown in the prepareFS.java example. | N/A
+|plots_arizona.json | This contains the shapefile for the plots from which sensor data is collected. This shapefile is internally used by RADIX+ to geo-reference ingested sensor data to their corresponding plots. The path to your plots shapefile is to be provided as an argument as shown in the prepareFS.java example. | N/A
 
 
 ### Update Paths & Aliases in bashrc
